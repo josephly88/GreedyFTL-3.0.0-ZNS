@@ -318,6 +318,14 @@ void handle_identify(NVME_ADMIN_COMMAND *nvmeAdminCmd, NVME_COMPLETION *nvmeCPL)
 		ASSERT((nvmeAdminCmd->PRP1[0] & 0xF) == 0 && (nvmeAdminCmd->PRP2[0] & 0xF) == 0);
 		identify_namespace(pIdentifyData);
 	}
+	else if(identifyInfo.CNS == 2)
+	{
+		if((nvmeAdminCmd->PRP1[0] & 0xF) != 0 || (nvmeAdminCmd->PRP2[0] & 0xF) != 0)
+			xil_printf("NI: %X, %X, %X, %X\r\n", nvmeAdminCmd->PRP1[1], nvmeAdminCmd->PRP1[0], nvmeAdminCmd->PRP2[1], nvmeAdminCmd->PRP2[0]);
+
+		ASSERT((nvmeAdminCmd->PRP1[0] & 0xF) == 0 && (nvmeAdminCmd->PRP2[0] & 0xF) == 0);
+		identify_namespae_list(pIdentifyData);
+	}
 	else
 		ASSERT(0);
 	
@@ -441,7 +449,6 @@ void handle_nvme_admin_cmd(NVME_COMMAND *nvmeCmd)
 			handle_get_log_page(nvmeAdminCmd, &nvmeCPL);
 			break;
 		}
-
 		default:
 		{
 			xil_printf("Not Support Admin Command OPC: %X\r\n", opc);

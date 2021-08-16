@@ -403,8 +403,8 @@ typedef struct _ADMIN_IDENTIFY_COMMAND_DW10
 	union {
 		unsigned int dword;
 		struct {
-			unsigned int CNS			:1;
-			unsigned int reserved0		:31;
+			unsigned int CNS			:2;
+			unsigned int reserved0		:30;
 		};
 	};
 } ADMIN_IDENTIFY_COMMAND_DW10;
@@ -574,8 +574,6 @@ typedef struct _ADMIN_IDENTIFY_CONTROLLER
 } ADMIN_IDENTIFY_CONTROLLER;
 
 
-
-
 /* Identify - LBA Format Data Structure */
 typedef struct _ADMIN_IDENTIFY_FORMAT_DATA
 {
@@ -659,6 +657,11 @@ typedef struct _ADMIN_IDENTIFY_NAMESPACE
 
 } ADMIN_IDENTIFY_NAMESPACE;
 
+typedef struct _ADMIN_IDENTIFY_NAMESPACE_LIST
+{
+	unsigned int id0;
+	unsigned char reserved0[4092];
+} ADMIN_IDENTIFY_NAMESPACE_LIST;
 
 /* IO Write Command */
 typedef struct _IO_WRITE_COMMAND_DW12

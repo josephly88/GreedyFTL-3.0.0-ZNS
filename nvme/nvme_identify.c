@@ -189,10 +189,21 @@ void identify_namespace(unsigned int pBuffer)
 	identifyNS->RESCAP.supportsWriteExclusiveAllRegistrants = 0x0;
 	identifyNS->RESCAP.supportsExclusiveAccessAllRegistrants = 0x0;
 
+
 	formatData = &identifyNS->LBAFx[0];
 
 	formatData->MS = 0x0;
 	formatData->LBADS = 0xC;
 	formatData->RP = 0x2;
+}
+
+void identify_namespae_list(unsigned int pBuffer)
+{
+	ADMIN_IDENTIFY_NAMESPACE_LIST *identifyNSL;
+	identifyNSL = (ADMIN_IDENTIFY_NAMESPACE_LIST*)pBuffer;
+
+	memset(identifyNSL, 0, sizeof(ADMIN_IDENTIFY_NAMESPACE_LIST));
+
+	identifyNSL->id0 = 0x1;
 }
 

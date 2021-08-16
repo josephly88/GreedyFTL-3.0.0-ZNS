@@ -59,5 +59,6 @@ void identify_controller(unsigned int pBuffer);
 
 void identify_namespace(unsigned int pBuffer);
 
+void identify_namespae_list(unsigned int pBuffer);
 
 #endif	//__NVME_IDENTIFY_H_
