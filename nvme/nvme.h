@@ -403,11 +403,25 @@ typedef struct _ADMIN_IDENTIFY_COMMAND_DW10
 	union {
 		unsigned int dword;
 		struct {
-			unsigned int CNS			:2;
-			unsigned int reserved0		:30;
+			unsigned int CNS			:8;
+			unsigned int reserved0		:8;
+			unsigned int CNTID			:16;
 		};
 	};
 } ADMIN_IDENTIFY_COMMAND_DW10;
+
+/* Identify Command */
+typedef struct _ADMIN_IDENTIFY_COMMAND_DW11
+{
+	union {
+		unsigned int dword;
+		struct {
+			unsigned int CNS_SID		:16;
+			unsigned int reserved0		:8;
+			unsigned int CSI			:8;
+		};
+	};
+} ADMIN_IDENTIFY_COMMAND_DW11;
 
 /* Get Log Page Command */
 typedef struct _ADMIN_GET_LOG_PAGE_DW10
