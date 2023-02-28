@@ -197,7 +197,7 @@ void identify_namespace(unsigned int pBuffer)
 	formatData->RP = 0x2;
 }
 
-void identify_namespae_list(unsigned int pBuffer)
+void identify_namespace_list(unsigned int pBuffer)
 {
 	ADMIN_IDENTIFY_NAMESPACE_LIST *identifyNSL;
 	identifyNSL = (ADMIN_IDENTIFY_NAMESPACE_LIST*)pBuffer;
@@ -206,4 +206,17 @@ void identify_namespae_list(unsigned int pBuffer)
 
 	identifyNSL->id0 = 0x1;
 }
+
+
+void identify_controller_ioset(unsigned int pBuffer)
+{
+	ADMIN_IDENTIFY_NAMESPACE_LIST *identifyNSL;
+	identifyNSL = (ADMIN_IDENTIFY_NAMESPACE_LIST*)pBuffer;
+
+	memset(identifyNSL, 0, sizeof(ADMIN_IDENTIFY_NAMESPACE_LIST));
+	identifyNSL->id0 = 0x2;
+}
+
+
+
 
