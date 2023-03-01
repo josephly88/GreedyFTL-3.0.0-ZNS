@@ -199,22 +199,46 @@ void identify_namespace(unsigned int pBuffer)
 
 void identify_namespace_list(unsigned int pBuffer)
 {
-	ADMIN_IDENTIFY_NAMESPACE_LIST *identifyNSL;
-	identifyNSL = (ADMIN_IDENTIFY_NAMESPACE_LIST*)pBuffer;
+	ADMIN_IDENTIFY_4096B *identify4096B;
+	identify4096B = (ADMIN_IDENTIFY_4096B*)pBuffer;
 
-	memset(identifyNSL, 0, sizeof(ADMIN_IDENTIFY_NAMESPACE_LIST));
+	memset(identify4096B, 0, sizeof(ADMIN_IDENTIFY_4096B));
 
-	identifyNSL->id0 = 0x1;
+	identify4096B->id0 = 0x1;
 }
 
+void identify_command_set(unsigned int pBuffer)
+{
+	ADMIN_IDENTIFY_4096B *identify4096B;
+	identify4096B = (ADMIN_IDENTIFY_4096B*)pBuffer;
+
+	memset(identify4096B, 0, sizeof(ADMIN_IDENTIFY_4096B));
+
+	identify4096B->id0 = 0x2;
+}
+
+void identify_zns_command_set(unsigned int pBuffer)
+{
+	ADMIN_IDENTIFY_ZNS_COMMAND_SET *identifyZnsCmdSet;
+	identifyZnsCmdSet = (ADMIN_IDENTIFY_ZNS_COMMAND_SET*)pBuffer;
+
+	memset(identifyZnsCmdSet, 0, sizeof(ADMIN_IDENTIFY_ZNS_COMMAND_SET));
+
+	identifyZnsCmdSet->MAR = 1;
+	identifyZnsCmdSet->MOR = 1;
+
+	// Zone Size
+	identifyZnsCmdSet->LBAFE[0].ZSZE[0] = 0x1;
+	identifyZnsCmdSet->LBAFE[0].ZSZE[1] = 0x0;
+}
 
 void identify_controller_ioset(unsigned int pBuffer)
 {
-	ADMIN_IDENTIFY_NAMESPACE_LIST *identifyNSL;
-	identifyNSL = (ADMIN_IDENTIFY_NAMESPACE_LIST*)pBuffer;
+	ADMIN_IDENTIFY_4096B *identify4096B;
+	identify4096B = (ADMIN_IDENTIFY_4096B*)pBuffer;
 
-	memset(identifyNSL, 0, sizeof(ADMIN_IDENTIFY_NAMESPACE_LIST));
-	identifyNSL->id0 = 0x2;
+	memset(identify4096B, 0, sizeof(ADMIN_IDENTIFY_4096B));
+	identify4096B->id0 = 0x2;
 }
 
 

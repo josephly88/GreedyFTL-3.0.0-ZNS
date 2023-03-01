@@ -671,11 +671,50 @@ typedef struct _ADMIN_IDENTIFY_NAMESPACE
 
 } ADMIN_IDENTIFY_NAMESPACE;
 
-typedef struct _ADMIN_IDENTIFY_NAMESPACE_LIST
+typedef struct _ADMIN_IDENTIFY_4096B
 {
 	unsigned int id0;
 	unsigned char reserved0[4092];
-} ADMIN_IDENTIFY_NAMESPACE_LIST;
+} ADMIN_IDENTIFY_4096B;
+
+typedef struct _ADMIN_IDENTIFY_ZNS_COMMAND_SET
+{
+	struct
+	{
+		unsigned char variableZoneCapacity					:1;
+		unsigned char zoneActiveExcursions					:1;
+		unsigned int reserved0								:14;
+	} ZOC;
+
+	struct
+	{
+		unsigned char readAcrossZoneBoundaries				:1;
+		unsigned int reserved0								:15;
+	}OZCS;
+
+	unsigned int MAR;
+	unsigned int MOR;
+	unsigned int RRL;
+	unsigned int FRL;
+	unsigned int RRL1;
+	unsigned int RRL2;
+	unsigned int RRL3;
+	unsigned int FRL1;
+	unsigned int FRL2;
+	unsigned int FRL3;
+
+	unsigned char reserved0[2772];
+
+	struct
+	{
+		unsigned int ZSZE[2];
+		unsigned int ZDES;
+		unsigned int reserve0;
+	}LBAFE[64];
+
+	unsigned char reserved1[256];
+
+}ADMIN_IDENTIFY_ZNS_COMMAND_SET;
 
 /* IO Write Command */
 typedef struct _IO_WRITE_COMMAND_DW12

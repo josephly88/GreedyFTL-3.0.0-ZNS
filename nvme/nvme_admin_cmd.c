@@ -317,6 +317,21 @@ void handle_identify(NVME_ADMIN_COMMAND *nvmeAdminCmd, NVME_COMPLETION *nvmeCPL)
 	{
 		identify_namespace_list(pIdentifyData);
 	}
+	else if(identifyInfo.CNS == 0x5){
+		ADMIN_IDENTIFY_COMMAND_DW11 DW11;
+		DW11.dword = nvmeAdminCmd->dword11;
+
+		if(DW11.CSI == 0x0){
+			identify_command_set(pIdentifyData);
+		}
+		else if(DW11.CSI == 0x2){
+			identify_zns_command_set(pIdentifyData);
+		}
+		else{
+			xil_printf("Undefined CSI value = 0x%x in CSN = 0x5", DW11.CSI);
+			ASSERT(0);
+		}
+	}
 	else if(identifyInfo.CNS == 0x6)
 	{
 		identify_controller_ioset(pIdentifyData);
