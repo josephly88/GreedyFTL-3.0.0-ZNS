@@ -113,6 +113,10 @@ void handle_nvme_io_write(unsigned int cmdSlotTag, NVME_IO_COMMAND *nvmeIOCmd)
 	ReqTransNvmeToSlice(cmdSlotTag, startLba[0], nlb, IO_NVM_WRITE);
 }
 
+void handle_nvme_io_zns_mgmt_recv(unsigned int cmdSlotTag, NVME_IO_COMMAND *nvmeIOCmd){
+
+}
+
 void handle_nvme_io_cmd(NVME_COMMAND *nvmeCmd)
 {
 	NVME_IO_COMMAND *nvmeIOCmd;
@@ -142,6 +146,10 @@ void handle_nvme_io_cmd(NVME_COMMAND *nvmeCmd)
 		{
 			//xil_printf("IO Read Command\r\n");
 			handle_nvme_io_read(nvmeCmd->cmdSlotTag, nvmeIOCmd);
+			break;
+		}
+		case IO_ZNS_MANAGEMENT_RECEIVE:
+		{
 			break;
 		}
 		default:

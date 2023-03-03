@@ -85,6 +85,7 @@
 #define IO_NVM_WRITE_UNCORRECTABLE							0x04
 #define IO_NVM_COMPARE										0x05
 #define IO_NVM_DATASET_MANAGEMENT							0x09
+#define IO_ZNS_MANAGEMENT_RECEIVE							0x7A
 
 /*Status Code Type */
 #define SCT_GENERIC_COMMAND_STATUS							0
