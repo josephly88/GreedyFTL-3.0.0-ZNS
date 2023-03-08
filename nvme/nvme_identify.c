@@ -224,12 +224,13 @@ void identify_zns_command_set(unsigned int pBuffer)
 
 	memset(identifyZnsCmdSet, 0, sizeof(ADMIN_IDENTIFY_ZNS_COMMAND_SET));
 
+	// Maximum Active Resource
 	identifyZnsCmdSet->MAR = 1;
+	// Maximun Open Resource
 	identifyZnsCmdSet->MOR = 1;
 
 	// Zone Size
-	identifyZnsCmdSet->LBAFE[0].ZSZE[0] = 0x1;
-	identifyZnsCmdSet->LBAFE[0].ZSZE[1] = 0x0;
+	identifyZnsCmdSet->LBAFE[0].ZSZE = 1;
 }
 
 void identify_controller_ioset(unsigned int pBuffer)

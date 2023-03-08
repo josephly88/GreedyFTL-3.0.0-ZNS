@@ -708,8 +708,8 @@ typedef struct _ADMIN_IDENTIFY_ZNS_COMMAND_SET
 
 	struct
 	{
-		unsigned int ZSZE[2];
-		unsigned int ZDES;
+		unsigned long long ZSZE;
+		unsigned char ZDES;
 		unsigned int reserve0;
 	}LBAFE[64];
 
@@ -804,6 +804,53 @@ typedef struct _IO_READ_COMMAND_DW15
 	};
 } IO_READ_COMMAND_DW15;
 
+/* IO ZNS Zone Management Receive*/
+typedef struct _IO_ZNS_ZONE_MANAGEMENT_RECEIVE_DW13
+{
+	union{
+		unsigned int dword;
+		struct {
+			unsigned int ZRA					:8;
+			unsigned int ZRA_specific_field 	:8;
+			unsigned int ZRA_specific_feature	:1;
+			unsigned int reserved0				:15;
+		};
+	};
+} IO_ZNS_ZONE_MANAGEMENT_RECEIVE_DW13;
+
+typedef struct _ZONE_DESCRIPTOR
+{
+	unsigned char ZT						:4;
+	unsigned char reserved0					:4;
+	unsigned char reserved1					:4;
+	unsigned char ZS						:4;
+	struct
+	{
+		unsigned char ZFC					:1;
+		unsigned char FZR					:1;
+		unsigned char RZR					:1;
+		unsigned char reserved0				:4;
+		unsigned char ZDEV					:1;
+	} ZA;
+	struct
+	{
+		unsigned char FZRTL					:2;
+		unsigned char RZRTL					:2;
+		unsigned char reserved0				:4;
+	} ZAI;
+	unsigned int reserved2;
+	unsigned long long ZCAP;
+	unsigned long long ZSLBA;
+	unsigned long long WP;
+	unsigned long long reserved3[4];
+} ZONE_DESCRIPTOR;
+
+typedef struct _IO_ZNS_MANAGEMENT_RECEIVE_ZONE_REPORT
+{
+	unsigned long long num_zone;
+	unsigned long long reserved0[7];
+	ZONE_DESCRIPTOR zone_descriptor[60];
+} IO_ZNS_MANAGEMENT_RECEIVE_ZONE_REPORT;
 
 /* IO Dataset Management Command */
 typedef struct _IO_DATASET_MANAGEMENT_COMMAND_DW10

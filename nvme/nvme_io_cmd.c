@@ -114,7 +114,59 @@ void handle_nvme_io_write(unsigned int cmdSlotTag, NVME_IO_COMMAND *nvmeIOCmd)
 }
 
 void handle_nvme_io_zns_mgmt_recv(unsigned int cmdSlotTag, NVME_IO_COMMAND *nvmeIOCmd){
+	IO_ZNS_ZONE_MANAGEMENT_RECEIVE_DW13 mgmtRecvInfo;
+	unsigned int pMgmtRecvData = ADMIN_CMD_DRAM_DATA_BUFFER;
+	unsigned int prp[2];
+	unsigned int prpLen;
+	unsigned long long SLBA;
+	unsigned int NumDword;
+	unsigned int dataLen;
 
+	mgmtRecvInfo.dword = nvmeIOCmd->dword13;
+	SLBA = (((unsigned long long)nvmeIOCmd->dword10 << 32) + nvmeIOCmd->dword11);
+	NumDword = nvmeIOCmd->dword12;
+	dataLen = (NumDword + 1) * 4;
+
+	if((nvmeIOCmd->PRP1[0] & 0xF) != 0 || (nvmeIOCmd->PRP2[0] & 0xF) != 0)
+		xil_printf("NI: %X, %X, %X, %X\r\n", nvmeIOCmd->PRP1[1], nvmeIOCmd->PRP1[0], nvmeIOCmd->PRP2[1], nvmeIOCmd->PRP2[0]);
+	ASSERT((nvmeIOCmd->PRP1[0] & 0xF) == 0 && (nvmeIOCmd->PRP2[0] & 0xF) == 0);
+
+	IO_ZNS_MANAGEMENT_RECEIVE_ZONE_REPORT *zone_report = (IO_ZNS_MANAGEMENT_RECEIVE_ZONE_REPORT*) pMgmtRecvData;
+	memset(zone_report, 0, sizeof(IO_ZNS_MANAGEMENT_RECEIVE_ZONE_REPORT));
+
+	zone_report->num_zone = 1;
+	zone_report->zone_descriptor[0].ZT = 0x2;
+	zone_report->zone_descriptor[0].ZS = 0xD;
+	zone_report->zone_descriptor[0].ZCAP = 0x1;
+//	for(int i = 0; i < (NumDword + 1) / 16; i++){
+//		zone_report->zone_descriptor[i].ZT = 0x2;
+//		zone_report->zone_descriptor[i].ZS = 0xD;
+//		zone_report->zone_descriptor[i].ZCAP = 0x1;
+//	}
+
+	prp[0] = nvmeIOCmd->PRP1[0];
+	prp[1] = nvmeIOCmd->PRP1[1];
+
+	if(dataLen <= (0x1000 - (prp[0] & 0xFFF)))
+		prpLen = dataLen;
+	else
+		prpLen = 0x1000 - (prp[0] & 0xFFF);
+
+	set_direct_tx_dma(pMgmtRecvData, prp[1], prp[0], prpLen);
+
+	if(prpLen < dataLen)
+	{
+		ASSERT(dataLen <= 0x1000);
+		
+		pMgmtRecvData = pMgmtRecvData + prpLen;
+		prpLen = dataLen - prpLen;
+		prp[0] = nvmeIOCmd->PRP2[0];
+		prp[1] = nvmeIOCmd->PRP2[1];
+
+		set_direct_tx_dma(pMgmtRecvData, prp[1], prp[0], prpLen);
+	}
+
+	check_direct_tx_dma_done();
 }
 
 void handle_nvme_io_cmd(NVME_COMMAND *nvmeCmd)
@@ -150,6 +202,10 @@ void handle_nvme_io_cmd(NVME_COMMAND *nvmeCmd)
 		}
 		case IO_ZNS_MANAGEMENT_RECEIVE:
 		{
+			handle_nvme_io_zns_mgmt_recv(nvmeCmd->cmdSlotTag, nvmeIOCmd);
+			nvmeCPL.dword[0] = 0;
+			nvmeCPL.specific = 0x0;
+			set_auto_nvme_cpl(nvmeCmd->cmdSlotTag, nvmeCPL.specific, nvmeCPL.statusFieldWord);
 			break;
 		}
 		default:
