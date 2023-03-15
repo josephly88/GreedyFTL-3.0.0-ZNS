@@ -114,16 +114,16 @@ void handle_nvme_io_write(unsigned int cmdSlotTag, NVME_IO_COMMAND *nvmeIOCmd)
 }
 
 void handle_nvme_io_zns_mgmt_recv(unsigned int cmdSlotTag, NVME_IO_COMMAND *nvmeIOCmd){
-	IO_ZNS_ZONE_MANAGEMENT_RECEIVE_DW13 mgmtRecvInfo;
+	//IO_ZNS_ZONE_MANAGEMENT_RECEIVE_DW13 mgmtRecvInfo;
 	unsigned int pMgmtRecvData = ADMIN_CMD_DRAM_DATA_BUFFER;
 	unsigned int prp[2];
 	unsigned int prpLen;
-	unsigned long long SLBA;
+	//unsigned long long SLBA;
 	unsigned int NumDword;
 	unsigned int dataLen;
 
-	mgmtRecvInfo.dword = nvmeIOCmd->dword13;
-	SLBA = (((unsigned long long)nvmeIOCmd->dword10 << 32) + nvmeIOCmd->dword11);
+	//mgmtRecvInfo.dword = nvmeIOCmd->dword13;
+	//SLBA = (((unsigned long long)nvmeIOCmd->dword10 << 32) + nvmeIOCmd->dword11);
 	NumDword = nvmeIOCmd->dword12;
 	dataLen = (NumDword + 1) * 4;
 
