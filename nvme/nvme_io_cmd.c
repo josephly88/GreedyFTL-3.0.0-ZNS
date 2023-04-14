@@ -114,7 +114,25 @@ void handle_nvme_io_write(unsigned int cmdSlotTag, NVME_IO_COMMAND *nvmeIOCmd)
 }
 
 void handle_nvme_io_zns_mgmt_send(unsigned int cmdSlotTag, NVME_IO_COMMAND *nvmeIOCmd){
-	
+	IO_ZNS_ZONE_MANGAEMENT_SEND_DW13 mgmtSendInfo;
+	unsigned long long SLBA;
+
+	mgmtSendInfo = nvmeIOCmd->dword13;
+	SLBA = (((unsigned long long)nvmeIOCmd->dword10 << 32) + nvmeIOCmd->dword11);
+
+	switch(mgmtSendInfo.ZSA)
+	{
+		case OPEN_ZONE:
+		{
+			break;
+		}
+		default:
+		{
+			xil_printf("Not Support Zone Management Send Command OPC: %X\r\n", mgmtSendInfo.ZSA);
+			ASSERT(0);
+			break;
+		}
+	}
 }
 
 void handle_nvme_io_zns_mgmt_recv(unsigned int cmdSlotTag, NVME_IO_COMMAND *nvmeIOCmd){

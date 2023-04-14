@@ -198,6 +198,14 @@
 #define NVME_TASK_RESET										0x5
 #pragma pack(push, 1)
 
+/* Zone Mangaement Send Zone Send Action (ZSA) */
+#define CLOSE_ZONE											0x1
+#define FINISH_ZONE											0x2
+#define OPEN_ZONE											0x3
+#define RESET_ZONE											0x4
+#define OFFLINE_ZONE										0x5
+#define SET_ZONE_DESCRIPTOR_EXTENSION						0x10
+
 typedef struct _NVME_COMMAND
 {
 	unsigned short qID;
@@ -804,6 +812,18 @@ typedef struct _IO_READ_COMMAND_DW15
 		};
 	};
 } IO_READ_COMMAND_DW15;
+
+typedef struct _IO_ZNS_ZONE_MANGAEMENT_SEND_DW13
+{
+	union{
+		unsigned int dword;
+		struct{
+			unsigned int ZSA					:8;
+			unsigned int SELECT_ALL				:1;
+			unsigned int reserved0				:23;
+		};
+	};
+} IO_ZNS_ZONE_MANGAEMENT_SEND_DW13;
 
 /* IO ZNS Zone Management Receive*/
 typedef struct _IO_ZNS_ZONE_MANAGEMENT_RECEIVE_DW13
