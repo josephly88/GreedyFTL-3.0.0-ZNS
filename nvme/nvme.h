@@ -198,6 +198,15 @@
 #define NVME_TASK_RESET										0x5
 #pragma pack(push, 1)
 
+/* Zone Descriptor - Zone State (ZS) */
+#define EMPTY												0x1
+#define IMPLICITLY_OPENED									0x2
+#define EXPLICITLY_OPENED									0x3
+#define CLOSED												0x4
+#define READ_ONLY											0xD
+#define FULL												0xE
+#define OFFLINE												0xF
+
 /* Zone Mangaement Send Zone Send Action (ZSA) */
 #define CLOSE_ZONE											0x1
 #define FINISH_ZONE											0x2
