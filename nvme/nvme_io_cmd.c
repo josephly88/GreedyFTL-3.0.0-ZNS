@@ -113,6 +113,10 @@ void handle_nvme_io_write(unsigned int cmdSlotTag, NVME_IO_COMMAND *nvmeIOCmd)
 	ReqTransNvmeToSlice(cmdSlotTag, startLba[0], nlb, IO_NVM_WRITE);
 }
 
+void handle_nvme_io_zns_mgmt_send(unsigned int cmdSlotTag, NVME_IO_COMMAND *nvmeIOCmd){
+	
+}
+
 void handle_nvme_io_zns_mgmt_recv(unsigned int cmdSlotTag, NVME_IO_COMMAND *nvmeIOCmd){
 	//IO_ZNS_ZONE_MANAGEMENT_RECEIVE_DW13 mgmtRecvInfo;
 	unsigned int pMgmtRecvData = ADMIN_CMD_DRAM_DATA_BUFFER;
@@ -198,6 +202,14 @@ void handle_nvme_io_cmd(NVME_COMMAND *nvmeCmd)
 		{
 			//xil_printf("IO Read Command\r\n");
 			handle_nvme_io_read(nvmeCmd->cmdSlotTag, nvmeIOCmd);
+			break;
+		}
+		case IO_ZNS_MANAGEMENT_SEND:
+		{
+			handle_nvme_io_zns_mgmt_send(nvmeCmd->cmdSlotTag, nvmeIOCmd);
+			nvmeCPL.dword[0] = 0;
+			nvmeCPL.specific = 0x0;
+			set_auto_nvme_cpl(nvmeCmd->cmdSlotTag, nvmeCPL.specific, nvmeCPL.statusFieldWord);
 			break;
 		}
 		case IO_ZNS_MANAGEMENT_RECEIVE:
