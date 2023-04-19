@@ -10,11 +10,11 @@ typedef struct _ZNS_ADDR
     union{
         unsigned int dword;
         struct{
-            unsigned int BLOCK_OFFSET       :14;    // Page size: 16384KB -> 14 bits
-            unsigned int CHIP_ID            :6;     // # way * # ch / 2^(# FCG - 1) : 8 * 8 / 2 ^ 0 = 64 -> 6 bits
-            unsigned int STRIP_ID           :7;     // # pages in a block : 128 -> 7 bits
+            unsigned int PAGE_OFFSET        :2;    // Page size: 16384KB -> 14 bits
+            unsigned int PAGE_COLUMN_ID     :6;     // # way * # ch / 2^(# FCG - 1) : 8 * 8 / 2 ^ 0 = 64 -> 6 bits
+            unsigned int PAGE_ROW_ID        :7;     // # pages in a block : 128 -> 7 bits
             //unsigned int FCG_ID             :0;   // # FCG - 1 : (1-1) = 0
-            unsigned int FBG_ID             :5;     // 32 - the bits above
+            unsigned int FBG_ID             :17;     // 32 - the bits above
         };
     };
 }ZNS_ADDR;
