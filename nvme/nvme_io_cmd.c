@@ -115,15 +115,19 @@ void handle_nvme_io_write(unsigned int cmdSlotTag, NVME_IO_COMMAND *nvmeIOCmd)
 
 void handle_nvme_io_zns_mgmt_send(unsigned int cmdSlotTag, NVME_IO_COMMAND *nvmeIOCmd){
 	IO_ZNS_ZONE_MANGAEMENT_SEND_DW13 mgmtSendInfo;
-	unsigned long long SLBA;
+	//unsigned long long SLBA;
 
-	mgmtSendInfo = nvmeIOCmd->dword13;
-	SLBA = (((unsigned long long)nvmeIOCmd->dword10 << 32) + nvmeIOCmd->dword11);
+	mgmtSendInfo.dword = nvmeIOCmd->dword[13];
+	//SLBA = (((unsigned long long)nvmeIOCmd->dword10 << 32) + nvmeIOCmd->dword11);
+
+	
+	xil_printf("Catch an zone management send command\r\n");
 
 	switch(mgmtSendInfo.ZSA)
 	{
 		case OPEN_ZONE:
 		{
+			xil_printf("Zone management send command: Open Zone\r\n");
 			break;
 		}
 		default:
