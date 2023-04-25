@@ -51,6 +51,8 @@
 #ifndef __NVME_H_
 #define __NVME_H_
 
+#include "zns/zns.h"
+
 #define MAX_NUM_OF_IO_SQ	8
 #define MAX_NUM_OF_IO_CQ	8
 
@@ -85,8 +87,6 @@
 #define IO_NVM_WRITE_UNCORRECTABLE							0x04
 #define IO_NVM_COMPARE										0x05
 #define IO_NVM_DATASET_MANAGEMENT							0x09
-#define IO_ZNS_MANAGEMENT_SEND								0x79
-#define IO_ZNS_MANAGEMENT_RECEIVE							0x7A
 
 /*Status Code Type */
 #define SCT_GENERIC_COMMAND_STATUS							0
@@ -197,23 +197,6 @@
 #define NVME_TASK_WAIT_RESET								0x4
 #define NVME_TASK_RESET										0x5
 #pragma pack(push, 1)
-
-/* Zone Descriptor - Zone State (ZS) */
-#define EMPTY												0x1
-#define IMPLICITLY_OPENED									0x2
-#define EXPLICITLY_OPENED									0x3
-#define CLOSED												0x4
-#define READ_ONLY											0xD
-#define FULL												0xE
-#define OFFLINE												0xF
-
-/* Zone Mangaement Send Zone Send Action (ZSA) */
-#define CLOSE_ZONE											0x1
-#define FINISH_ZONE											0x2
-#define OPEN_ZONE											0x3
-#define RESET_ZONE											0x4
-#define OFFLINE_ZONE										0x5
-#define SET_ZONE_DESCRIPTOR_EXTENSION						0x10
 
 typedef struct _NVME_COMMAND
 {
@@ -696,44 +679,6 @@ typedef struct _ADMIN_IDENTIFY_4096B
 	unsigned char reserved0[4092];
 } ADMIN_IDENTIFY_4096B;
 
-typedef struct _ADMIN_IDENTIFY_ZNS_COMMAND_SET
-{
-	struct
-	{
-		unsigned char variableZoneCapacity					:1;
-		unsigned char zoneActiveExcursions					:1;
-		unsigned int reserved0								:14;
-	} ZOC;
-
-	struct
-	{
-		unsigned char readAcrossZoneBoundaries				:1;
-		unsigned int reserved0								:15;
-	}OZCS;
-
-	unsigned int MAR;
-	unsigned int MOR;
-	unsigned int RRL;
-	unsigned int FRL;
-	unsigned int RRL1;
-	unsigned int RRL2;
-	unsigned int RRL3;
-	unsigned int FRL1;
-	unsigned int FRL2;
-	unsigned int FRL3;
-
-	unsigned char reserved0[2772];
-
-	struct
-	{
-		unsigned long long ZSZE;
-		unsigned char ZDES;
-		unsigned int reserve0;
-	}LBAFE[64];
-
-	unsigned char reserved1[256];
-
-}ADMIN_IDENTIFY_ZNS_COMMAND_SET;
 
 /* IO Write Command */
 typedef struct _IO_WRITE_COMMAND_DW12
@@ -821,66 +766,6 @@ typedef struct _IO_READ_COMMAND_DW15
 		};
 	};
 } IO_READ_COMMAND_DW15;
-
-typedef struct _IO_ZNS_ZONE_MANGAEMENT_SEND_DW13
-{
-	union{
-		unsigned int dword;
-		struct{
-			unsigned int ZSA					:8;
-			unsigned int SELECT_ALL				:1;
-			unsigned int reserved0				:23;
-		};
-	};
-} IO_ZNS_ZONE_MANGAEMENT_SEND_DW13;
-
-/* IO ZNS Zone Management Receive*/
-typedef struct _IO_ZNS_ZONE_MANAGEMENT_RECEIVE_DW13
-{
-	union{
-		unsigned int dword;
-		struct {
-			unsigned int ZRA					:8;
-			unsigned int ZRA_specific_field 	:8;
-			unsigned int ZRA_specific_feature	:1;
-			unsigned int reserved0				:15;
-		};
-	};
-} IO_ZNS_ZONE_MANAGEMENT_RECEIVE_DW13;
-
-typedef struct _ZONE_DESCRIPTOR
-{
-	unsigned char ZT						:4;
-	unsigned char reserved0					:4;
-	unsigned char reserved1					:4;
-	unsigned char ZS						:4;
-	struct
-	{
-		unsigned char ZFC					:1;
-		unsigned char FZR					:1;
-		unsigned char RZR					:1;
-		unsigned char reserved0				:4;
-		unsigned char ZDEV					:1;
-	} ZA;
-	struct
-	{
-		unsigned char FZRTL					:2;
-		unsigned char RZRTL					:2;
-		unsigned char reserved0				:4;
-	} ZAI;
-	unsigned int reserved2;
-	unsigned long long ZCAP;
-	unsigned long long ZSLBA;
-	unsigned long long WP;
-	unsigned long long reserved3[4];
-} ZONE_DESCRIPTOR;
-
-typedef struct _IO_ZNS_MANAGEMENT_RECEIVE_ZONE_REPORT
-{
-	unsigned long long num_zone;
-	unsigned long long reserved0[7];
-	ZONE_DESCRIPTOR zone_descriptor[60];
-} IO_ZNS_MANAGEMENT_RECEIVE_ZONE_REPORT;
 
 /* IO Dataset Management Command */
 typedef struct _IO_DATASET_MANAGEMENT_COMMAND_DW10

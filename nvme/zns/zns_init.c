@@ -1,4 +1,3 @@
-#include "zns.h"
 #include "zns_init.h"
 
 void InitZNS()
