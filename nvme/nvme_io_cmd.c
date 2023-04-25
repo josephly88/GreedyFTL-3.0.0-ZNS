@@ -58,6 +58,8 @@
 #include "host_lld.h"
 #include "nvme_io_cmd.h"
 
+#include "../memory_map.h"
+
 #include "../ftl_config.h"
 #include "../request_transform.h"
 
@@ -132,7 +134,7 @@ void handle_nvme_io_zns_mgmt_send(unsigned int cmdSlotTag, NVME_IO_COMMAND *nvme
 		}
 		default:
 		{
-			xil_printf("Not Support Zone Management Send Command OPC: %X\r\n", mgmtSendInfo.ZSA);
+			xil_printf("Not Support Zone Management Send Command OPC: 0x%X\r\n", mgmtSendInfo.ZSA);
 			ASSERT(0);
 			break;
 		}
@@ -140,7 +142,7 @@ void handle_nvme_io_zns_mgmt_send(unsigned int cmdSlotTag, NVME_IO_COMMAND *nvme
 }
 
 void handle_nvme_io_zns_mgmt_recv(unsigned int cmdSlotTag, NVME_IO_COMMAND *nvmeIOCmd){
-	//IO_ZNS_ZONE_MANAGEMENT_RECEIVE_DW13 mgmtRecvInfo;
+	IO_ZNS_ZONE_MANAGEMENT_RECEIVE_DW13 mgmtRecvInfo;
 	unsigned int pMgmtRecvData = ADMIN_CMD_DRAM_DATA_BUFFER;
 	unsigned int prp[2];
 	unsigned int prpLen;
@@ -148,7 +150,7 @@ void handle_nvme_io_zns_mgmt_recv(unsigned int cmdSlotTag, NVME_IO_COMMAND *nvme
 	unsigned int NumDword;
 	unsigned int dataLen;
 
-	//mgmtRecvInfo.dword = nvmeIOCmd->dword13;
+	mgmtRecvInfo.dword = nvmeIOCmd->dword13;
 	//SLBA = (((unsigned long long)nvmeIOCmd->dword10 << 32) + nvmeIOCmd->dword11);
 	NumDword = nvmeIOCmd->dword12;
 	dataLen = (NumDword + 1) * 4;
@@ -160,15 +162,48 @@ void handle_nvme_io_zns_mgmt_recv(unsigned int cmdSlotTag, NVME_IO_COMMAND *nvme
 	IO_ZNS_MANAGEMENT_RECEIVE_ZONE_REPORT *zone_report = (IO_ZNS_MANAGEMENT_RECEIVE_ZONE_REPORT*) pMgmtRecvData;
 	memset(zone_report, 0, sizeof(IO_ZNS_MANAGEMENT_RECEIVE_ZONE_REPORT));
 
-	zone_report->num_zone = 1;
-	zone_report->zone_descriptor[0].ZT = 0x2;
-	zone_report->zone_descriptor[0].ZS = 0xD;
-	zone_report->zone_descriptor[0].ZCAP = 0x1;
-//	for(int i = 0; i < (NumDword + 1) / 16; i++){
-//		zone_report->zone_descriptor[i].ZT = 0x2;
-//		zone_report->zone_descriptor[i].ZS = 0xD;
-//		zone_report->zone_descriptor[i].ZCAP = 0x1;
-//	}
+	P_ZONE_MAP zoneMapPtr = ZONE_MAP_ADDR;
+	unsigned int num_zone = zoneMapPtr->Num_Open_Zone + zoneMapPtr->Num_Close_Zone + zoneMapPtr->Num_Full_Zone + zoneMapPtr->Num_Empty_Zone + zoneMapPtr->Num_Read_Zone + zoneMapPtr->Num_Off_Zone;
+	zone_report->num_zone = num_zone;
+	int zone_itr = 0;
+	unsigned int REQ_ZONE_STATE = mgmtRecvInfo.ZRA_specific_field;
+	for(int i = 0; i < num_zone; i++){
+		unsigned int ZONE_STATE = zoneMapPtr->zoneReg[i].Zone_State;
+		if(REQ_ZONE_STATE == 0x1){
+			if(ZONE_STATE != EMPTY) continue;
+		}
+		else if(REQ_ZONE_STATE == 0x2){
+			if(ZONE_STATE != IMPLICITLY_OPENED) continue;
+		}
+		eles if(REQ_ZONE_STATE == 0x3){
+			if(ZONE_STATE != EXPLICITLY_OPENED) continue;
+		}
+		else if(REQ_ZONE_STATE == 0x4){
+			if(ZONE_STATE != CLOSED) continue;
+		}
+		else if(REQ_ZONE_STATE == 0x5){
+			if(ZONE_STATE != FULL) continue;
+		}
+		else if(REQ_ZONE_STATE == 0x6){
+			if(ZONE_STATE != READ_ONLY) continue;
+		}
+		else if(REQ_ZONE_STATE == 0x7){
+			if(ZONE_STATE != OFFLINE) continue;
+		}
+		else{
+			xil_printf("Not Support Zone Receive Action Specific Field: 0x%X\r\n", REQ_ZONE_STATE);
+			ASSERT(0);
+			break;
+		}
+
+		zone_report->zone_descriptor[zone_itr].ZT = 0x2;
+		zone_report->zone_descriptor[zone_itr].ZS = zoneMapPtr->zoneReg[i].Zone_State;
+		zone_report->zone_descriptor[zone_itr].ZCAP = ZONE_CAP;
+		zone_report->zone_descriptor[zone_itr].ZSLBA = i * ZONE_CAP;
+		zone_report->zone_descriptor[zone_itr].WP = zoneMapPtr->zoneReg[i].Write_Pointer;
+		
+		zone_itr++;
+	}
 
 	prp[0] = nvmeIOCmd->PRP1[0];
 	prp[1] = nvmeIOCmd->PRP1[1];
