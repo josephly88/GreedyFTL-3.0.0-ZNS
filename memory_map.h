@@ -63,7 +63,14 @@
 #define NVME_MANAGEMENT_END_ADDR		0x002FFFFF
 
 #define RESERVED0_START_ADDR			0x00300000
-#define RESERVED0_END_ADDR				0x0FFFFFFF
+#define RESERVED0_END_ADDR              0x003FFFFF
+
+//for ZNS map tables
+#define ZNS_MANAGEMENT_START_ADDR       0x00400000
+// for map tables
+#define ZONE_MAP_ADDR                   0x00500000
+
+#define ZNS_MANAGEMENT_END_ADDR			0x0FFFFFFF
 
 #define FTL_MANAGEMENT_START_ADDR		0x10000000
 // Uncached & Unbuffered

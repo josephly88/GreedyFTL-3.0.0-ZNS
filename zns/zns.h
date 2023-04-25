@@ -1,6 +1,7 @@
 #ifndef __ZNS_H_
 #define __ZNS_H_
 
+#define MAXIMUM_ZONE_COUNT                  128
 #define MAXIMUM_OPEN_ZONE_COUNT             1
 #define MAXIMUM_CLOSE_ZONE_COUNT            0
 
@@ -29,6 +30,12 @@ typedef struct _ZONE_REG
 
 typedef struct _ZONE_MAP
 {
+    unsigned int Num_Open_Zone;
+    unsigned int Num_Close_Zone;
+    unsigned int Num_Full_Zone;
+    unsigned int Num_Empty_Zone;
+    unsigned int Num_Read_Zone;
+    unsigned int Num_Off_Zone;
     ZONE_REG zoneReg[MAXIMUM_OPEN_ZONE_COUNT];
 } ZONE_MAP, *P_ZONE_MAP;
 
