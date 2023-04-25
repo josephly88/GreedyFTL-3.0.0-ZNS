@@ -117,19 +117,38 @@ void handle_nvme_io_write(unsigned int cmdSlotTag, NVME_IO_COMMAND *nvmeIOCmd)
 
 void handle_nvme_io_zns_mgmt_send(unsigned int cmdSlotTag, NVME_IO_COMMAND *nvmeIOCmd){
 	IO_ZNS_ZONE_MANGAEMENT_SEND_DW13 mgmtSendInfo;
-	//unsigned long long SLBA;
+	unsigned long long SLBA;
 
 	mgmtSendInfo.dword = nvmeIOCmd->dword[13];
-	//SLBA = (((unsigned long long)nvmeIOCmd->dword10 << 32) + nvmeIOCmd->dword11);
+	SLBA = (((unsigned long long)nvmeIOCmd->dword10 << 32) + nvmeIOCmd->dword11);
 
-	
 	xil_printf("Catch an zone management send command\r\n");
 
 	switch(mgmtSendInfo.ZSA)
 	{
 		case OPEN_ZONE:
 		{
-			xil_printf("Zone management send command: Open Zone\r\n");
+			P_ZONE_MAP zoneMapPtr = ZONE_MAP_ADDR;
+
+			if(mgmtSendInfo.SELECT_ALL == 1){
+				for(int i = 0; i < MAXIMUM_ZONE_COUNT; i++){
+					if(zoneMapPtr->zoneReg[i].Zone_State == CLOSED){
+						zoneMapPtr->zoneReg[i].Zone_State = EXPLICITLY_OPENED;
+						// MAP A FBG
+					}
+				}
+			}
+			else{
+				unsigned int zone_id = SLBA / ZONE_CAP;
+				unsigned char old_state = zoneMapPtr->zoneReg[zone_id].Zone_State;
+				if(old_state == EMPTY || old_state == IMPLICITLY_OPENED || old_state == CLOSED){
+					zoneMapPtr->zoneReg[zone_id].Zone_State = EXPLICITLY_OPENED;
+					// MAP A FBG
+				}
+				else if(old_state == READ_ONLY || old_state == OFFLINE){
+					// Abort
+				}
+			}
 			break;
 		}
 		default:
@@ -165,9 +184,11 @@ void handle_nvme_io_zns_mgmt_recv(unsigned int cmdSlotTag, NVME_IO_COMMAND *nvme
 	P_ZONE_MAP zoneMapPtr = ZONE_MAP_ADDR;
 	unsigned int num_zone = zoneMapPtr->Num_Open_Zone + zoneMapPtr->Num_Close_Zone + zoneMapPtr->Num_Full_Zone + zoneMapPtr->Num_Empty_Zone + zoneMapPtr->Num_Read_Zone + zoneMapPtr->Num_Off_Zone;
 	zone_report->num_zone = num_zone;
+	
 	int zone_itr = 0;
-	unsigned int REQ_ZONE_STATE = mgmtRecvInfo.ZRA_specific_field;
+	unsigned int REQ_ZONE_STATE = mgmtRecvInfo.ZRA_specific_field;	
 	for(int i = 0; i < num_zone; i++){
+
 		unsigned int ZONE_STATE = zoneMapPtr->zoneReg[i].Zone_State;
 		if(REQ_ZONE_STATE == 0x1){
 			if(ZONE_STATE != EMPTY) continue;
@@ -175,7 +196,7 @@ void handle_nvme_io_zns_mgmt_recv(unsigned int cmdSlotTag, NVME_IO_COMMAND *nvme
 		else if(REQ_ZONE_STATE == 0x2){
 			if(ZONE_STATE != IMPLICITLY_OPENED) continue;
 		}
-		eles if(REQ_ZONE_STATE == 0x3){
+		else if(REQ_ZONE_STATE == 0x3){
 			if(ZONE_STATE != EXPLICITLY_OPENED) continue;
 		}
 		else if(REQ_ZONE_STATE == 0x4){
@@ -201,7 +222,7 @@ void handle_nvme_io_zns_mgmt_recv(unsigned int cmdSlotTag, NVME_IO_COMMAND *nvme
 		zone_report->zone_descriptor[zone_itr].ZCAP = ZONE_CAP;
 		zone_report->zone_descriptor[zone_itr].ZSLBA = i * ZONE_CAP;
 		zone_report->zone_descriptor[zone_itr].WP = zoneMapPtr->zoneReg[i].Write_Pointer;
-		
+
 		zone_itr++;
 	}
 

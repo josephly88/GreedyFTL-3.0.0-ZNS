@@ -7,9 +7,7 @@
 
 #define ZONE_CAP                            32768 // 32768 * 4096 = 128MB
 
-#define MAXIMUM_ZONE_COUNT                  8   // 8 * 128MB = 1TB
-#define MAXIMUM_OPEN_ZONE_COUNT             8
-#define MAXIMUM_CLOSE_ZONE_COUNT            0
+#define MAXIMUM_ZONE_COUNT                  1   // 8 * 128MB = 1TB
 
 /* Zone Descriptor - Zone State (ZS) */
 #define EMPTY												0x1
@@ -59,7 +57,7 @@ typedef struct _ZONE_MAP
     unsigned int Num_Empty_Zone;
     unsigned int Num_Read_Zone;
     unsigned int Num_Off_Zone;
-    ZONE_REG zoneReg[MAXIMUM_OPEN_ZONE_COUNT];
+    ZONE_REG zoneReg[MAXIMUM_ZONE_COUNT];
 } ZONE_MAP, *P_ZONE_MAP;
 
 /* ZNS Identify Namespace Data Structure */
