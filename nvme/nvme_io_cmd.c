@@ -63,6 +63,8 @@
 #include "../ftl_config.h"
 #include "../request_transform.h"
 
+#include "zns/zns_mgmt.h"
+
 void handle_nvme_io_read(unsigned int cmdSlotTag, NVME_IO_COMMAND *nvmeIOCmd)
 {
 	IO_READ_COMMAND_DW12 readInfo12;
@@ -120,36 +122,13 @@ void handle_nvme_io_zns_mgmt_send(unsigned int cmdSlotTag, NVME_IO_COMMAND *nvme
 	unsigned long long SLBA;
 
 	mgmtSendInfo.dword = nvmeIOCmd->dword[13];
-	SLBA = (((unsigned long long)nvmeIOCmd->dword10 << 32) + nvmeIOCmd->dword11);
-
-	xil_printf("Catch an zone management send command\r\n");
+	SLBA = (((unsigned long long)nvmeIOCmd->dword11 << 32) + nvmeIOCmd->dword10);
 
 	switch(mgmtSendInfo.ZSA)
 	{
 		case OPEN_ZONE:
 		{
-			P_ZONE_MAP zoneMapPtr = (P_ZONE_MAP) ZONE_MAP_ADDR;
-
-			if(mgmtSendInfo.SELECT_ALL == 1){
-				int i;
-				for(i = 0; i < MAXIMUM_ZONE_COUNT; i++){
-					if(zoneMapPtr->zoneReg[i].Zone_State == CLOSED){
-						zoneMapPtr->zoneReg[i].Zone_State = EXPLICITLY_OPENED;
-						// MAP A FBG
-					}
-				}
-			}
-			else{
-				unsigned int zone_id = SLBA / ZONE_CAP;
-				unsigned char old_state = zoneMapPtr->zoneReg[zone_id].Zone_State;
-				if(old_state == EMPTY || old_state == IMPLICITLY_OPENED || old_state == CLOSED){
-					zoneMapPtr->zoneReg[zone_id].Zone_State = EXPLICITLY_OPENED;
-					// MAP A FBG
-				}
-				else if(old_state == READ_ONLY || old_state == OFFLINE){
-					// Abort
-				}
-			}
+			handle_zns_open_zone(mgmtSendInfo, SLBA);
 			break;
 		}
 		default:
@@ -171,7 +150,7 @@ void handle_nvme_io_zns_mgmt_recv(unsigned int cmdSlotTag, NVME_IO_COMMAND *nvme
 	unsigned int dataLen;
 
 	mgmtRecvInfo.dword = nvmeIOCmd->dword13;
-	//SLBA = (((unsigned long long)nvmeIOCmd->dword10 << 32) + nvmeIOCmd->dword11);
+	//SLBA = (((unsigned long long)nvmeIOCmd->dword11 << 32) + nvmeIOCmd->dword10);
 	NumDword = nvmeIOCmd->dword12;
 	dataLen = (NumDword + 1) * 4;
 

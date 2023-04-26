@@ -7,7 +7,7 @@
 
 #define ZONE_CAP                            32768 // 32768 * 4096 = 128MB
 
-#define MAXIMUM_ZONE_COUNT                  1   // 8 * 128MB = 1TB
+#define MAXIMUM_ZONE_COUNT                  8   // 8 * 128MB = 1TB
 
 /* Zone Descriptor - Zone State (ZS) */
 #define EMPTY												0x1
