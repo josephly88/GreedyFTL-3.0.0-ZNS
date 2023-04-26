@@ -126,9 +126,29 @@ void handle_nvme_io_zns_mgmt_send(unsigned int cmdSlotTag, NVME_IO_COMMAND *nvme
 
 	switch(mgmtSendInfo.ZSA)
 	{
+		case CLOSE_ZONE:
+		{
+			handle_zns_close_zone(mgmtSendInfo, SLBA);
+			break;
+		}
+		case FINISH_ZONE:
+		{
+			handle_zns_finish_zone(mgmtSendInfo, SLBA);
+			break;
+		}
 		case OPEN_ZONE:
 		{
 			handle_zns_open_zone(mgmtSendInfo, SLBA);
+			break;
+		}
+		case RESET_ZONE:
+		{
+			handle_zns_reset_zone(mgmtSendInfo, SLBA);
+			break;
+		}
+		case OFFLINE_ZONE:
+		{
+			handle_zns_offline_zone(mgmtSendInfo, SLBA);
 			break;
 		}
 		default:
