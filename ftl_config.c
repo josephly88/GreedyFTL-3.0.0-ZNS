@@ -51,6 +51,8 @@
 #include "xil_printf.h"
 #include "memory_map.h"
 
+#include "nvme/zns/zns_init.h"
+
 unsigned int storageCapacity_L;
 V2FMCRegisters* chCtlReg[USER_CHANNELS];
 

@@ -128,10 +128,11 @@ void handle_nvme_io_zns_mgmt_send(unsigned int cmdSlotTag, NVME_IO_COMMAND *nvme
 	{
 		case OPEN_ZONE:
 		{
-			P_ZONE_MAP zoneMapPtr = ZONE_MAP_ADDR;
+			P_ZONE_MAP zoneMapPtr = (P_ZONE_MAP) ZONE_MAP_ADDR;
 
 			if(mgmtSendInfo.SELECT_ALL == 1){
-				for(int i = 0; i < MAXIMUM_ZONE_COUNT; i++){
+				int i;
+				for(i = 0; i < MAXIMUM_ZONE_COUNT; i++){
 					if(zoneMapPtr->zoneReg[i].Zone_State == CLOSED){
 						zoneMapPtr->zoneReg[i].Zone_State = EXPLICITLY_OPENED;
 						// MAP A FBG
@@ -181,13 +182,14 @@ void handle_nvme_io_zns_mgmt_recv(unsigned int cmdSlotTag, NVME_IO_COMMAND *nvme
 	IO_ZNS_MANAGEMENT_RECEIVE_ZONE_REPORT *zone_report = (IO_ZNS_MANAGEMENT_RECEIVE_ZONE_REPORT*) pMgmtRecvData;
 	memset(zone_report, 0, sizeof(IO_ZNS_MANAGEMENT_RECEIVE_ZONE_REPORT));
 
-	P_ZONE_MAP zoneMapPtr = ZONE_MAP_ADDR;
+	P_ZONE_MAP zoneMapPtr = (P_ZONE_MAP) ZONE_MAP_ADDR;
 	unsigned int num_zone = zoneMapPtr->Num_Open_Zone + zoneMapPtr->Num_Close_Zone + zoneMapPtr->Num_Full_Zone + zoneMapPtr->Num_Empty_Zone + zoneMapPtr->Num_Read_Zone + zoneMapPtr->Num_Off_Zone;
 	zone_report->num_zone = num_zone;
 	
 	int zone_itr = 0;
 	unsigned int REQ_ZONE_STATE = mgmtRecvInfo.ZRA_specific_field;	
-	for(int i = 0; i < num_zone; i++){
+	int i;
+	for(i = 0; i < num_zone; i++){
 
 		unsigned int ZONE_STATE = zoneMapPtr->zoneReg[i].Zone_State;
 		if(REQ_ZONE_STATE == 0x1){
@@ -212,9 +214,11 @@ void handle_nvme_io_zns_mgmt_recv(unsigned int cmdSlotTag, NVME_IO_COMMAND *nvme
 			if(ZONE_STATE != OFFLINE) continue;
 		}
 		else{
-			xil_printf("Not Support Zone Receive Action Specific Field: 0x%X\r\n", REQ_ZONE_STATE);
-			ASSERT(0);
-			break;
+			if(REQ_ZONE_STATE != 0x0){
+				xil_printf("Not Support Zone Receive Action Specific Field: 0x%X\r\n", REQ_ZONE_STATE);
+				ASSERT(0);
+				break;
+			}
 		}
 
 		zone_report->zone_descriptor[zone_itr].ZT = 0x2;
