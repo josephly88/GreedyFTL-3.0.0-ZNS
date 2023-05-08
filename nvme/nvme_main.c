@@ -67,6 +67,7 @@
 #include "nvme_io_cmd.h"
 
 #include "../memory_map.h"
+#include "zns/zns.h"
 
 volatile NVME_CONTEXT g_nvmeTask;
 
@@ -113,7 +114,10 @@ void nvme_main()
 				else
 				{
 					handle_nvme_io_cmd(&nvmeCmd);
-					ReqTransSliceToLowLevel();
+					if(ZNS_IO_COMMAND_SET)
+						ZNS_ReqTransSliceToLowLeve();	
+					else
+						ReqTransSliceToLowLevel();	
 					exeLlr=0;
 				}
 			}
