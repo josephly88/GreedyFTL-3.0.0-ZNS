@@ -3,6 +3,8 @@
 
 #include "zns.h"
 
+int ZoneWriteCheck(unsigned int startLBA);
+
 void ZNS_ReqTransSliceToLowLeve();
 
 #endif

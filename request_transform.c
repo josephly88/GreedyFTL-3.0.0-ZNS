@@ -54,6 +54,8 @@
 #include "memory_map.h"
 #include "ftl_config.h"
 
+#include "nvme/zns/zns.h"
+
 P_ROW_ADDR_DEPENDENCY_TABLE rowAddrDependencyTablePtr;
 
 void InitDependencyTable()
@@ -91,6 +93,11 @@ void ReqTransNvmeToSlice(unsigned int cmdSlotTag, unsigned int startLba, unsigne
 		reqCode = REQ_CODE_READ;
 	else
 		assert(!"[WARNING] Not supported command code [WARNING]");
+
+	if(ZNS_IO_COMMAND_SET && cmdCode == IO_NVM_WRITE){
+		if(zoneWriteCheck(startLba) == 0)
+			return;
+	}
 
 	//first transform
 	nvmeBlockOffset = (startLba % NVME_BLOCKS_PER_SLICE);
