@@ -287,18 +287,30 @@ void handle_nvme_io_cmd(NVME_COMMAND *nvmeCmd)
 		}
 		case IO_ZNS_MANAGEMENT_SEND:
 		{
-			handle_nvme_io_zns_mgmt_send(nvmeCmd->cmdSlotTag, nvmeIOCmd);
-			nvmeCPL.dword[0] = 0;
-			nvmeCPL.specific = 0x0;
-			set_auto_nvme_cpl(nvmeCmd->cmdSlotTag, nvmeCPL.specific, nvmeCPL.statusFieldWord);
+			if(ZNS_IO_COMMAND_SET){
+				handle_nvme_io_zns_mgmt_send(nvmeCmd->cmdSlotTag, nvmeIOCmd);
+				nvmeCPL.dword[0] = 0;
+				nvmeCPL.specific = 0x0;
+				set_auto_nvme_cpl(nvmeCmd->cmdSlotTag, nvmeCPL.specific, nvmeCPL.statusFieldWord);
+			}
+			else{
+				xil_printf("Not Support ZNS IO Command Set - OPC: %X\r\n", opc);
+				ASSERT(0);		
+			}
 			break;
 		}
 		case IO_ZNS_MANAGEMENT_RECEIVE:
 		{
-			handle_nvme_io_zns_mgmt_recv(nvmeCmd->cmdSlotTag, nvmeIOCmd);
-			nvmeCPL.dword[0] = 0;
-			nvmeCPL.specific = 0x0;
-			set_auto_nvme_cpl(nvmeCmd->cmdSlotTag, nvmeCPL.specific, nvmeCPL.statusFieldWord);
+			if(ZNS_IO_COMMAND_SET){
+				handle_nvme_io_zns_mgmt_recv(nvmeCmd->cmdSlotTag, nvmeIOCmd);
+				nvmeCPL.dword[0] = 0;
+				nvmeCPL.specific = 0x0;
+				set_auto_nvme_cpl(nvmeCmd->cmdSlotTag, nvmeCPL.specific, nvmeCPL.statusFieldWord);
+			}
+			else{
+				xil_printf("Not Support ZNS IO Command Set - OPC: %X\r\n", opc);
+				ASSERT(0);		
+			}			
 			break;
 		}
 		default:

@@ -325,7 +325,13 @@ void handle_identify(NVME_ADMIN_COMMAND *nvmeAdminCmd, NVME_COMPLETION *nvmeCPL)
 			identify_command_set(pIdentifyData);
 		}
 		else if(DW11.CSI == 0x2){
-			identify_zns_command_set(pIdentifyData);
+			if(ZNS_IO_COMMAND_SET){
+				identify_zns_command_set(pIdentifyData);
+			}
+			else{
+				xil_printf("Not Support ZNS IO Command Set - CSI value = 0x%x in CSN = 0x5", DW11.CSI);
+				ASSERT(0);
+			}
 		}
 		else{
 			xil_printf("Undefined CSI value = 0x%x in CSN = 0x5", DW11.CSI);
