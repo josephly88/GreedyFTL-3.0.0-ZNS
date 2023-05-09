@@ -7,22 +7,38 @@
 #include "../../memory_map.h"
 #include "../../ftl_config.h"
 
-int ZoneWriteCheck(unsigned int startLBA){
+int ZoneWriteCheck(unsigned int slba, unsigned int numOfSlice){
 
     P_ZONE_MAP zoneMapPtr = (P_ZONE_MAP) ZONE_MAP_ADDR;
 
-    unsigned int zoneID;
-        // Let's say we already translate the ZoneID from the startLBA
-    if(zoneID == 0)
-        return 0;
+    ZONE_ID_EXTRACTOR_SLBA zoneIDExtr;
+	zoneIDExtr.dword = slba;
+	unsigned int zoneID = zoneIDExtr.ZONE_ID;
+	
+	// Zone ID Check
+	if(zoneID < 0 || zoneID >= MAXIMUM_ZONE_COUNT)
+		return 0;
 
-    unsigned char zone_state = zoneMapPtr->zoneReg[zoneID].Zone_State;
-    if(zone_state == IMPLICITLY_OPENED || zone_state == EXPLICITLY_OPENED || zone_state == CLOSED){
-        if(zoneMapPtr->zoneReg[zoneID].Write_Pointer == startLBA)
-            return 1;
-    }
-    
-    return 0;
+	// Zone State Check
+	unsigned char zoneState = zoneMapPtr->zoneReg[zoneID].Zone_State;
+	if(zoneState != IMPLICITLY_OPENED && zoneState != EXPLICITLY_OPENED && zoneState != CLOSED && zoneState != EMPTY)
+		return 0;
+	
+	// Sequential Write Check
+	if(zoneMapPtr->zoneReg[zoneID].Write_Pointer != slba)
+		return 0;
+
+	// Out-of-Bound Check
+	if(zoneMapPtr->zoneReg[zoneID].Write_Pointer + numOfSlice*4 > (zoneID + 1) * (ZONE_CAP/NVME_BLOCKS_PER_SLICE))
+		return 0; 
+
+	// Increment the write pointer
+	zoneMapPtr->zoneReg[zoneID].Write_Pointer += numOfSlice*4;
+	if(zoneMapPtr->zoneReg[zoneID].Write_Pointer == (zoneID + 1) * (ZONE_CAP/NVME_BLOCKS_PER_SLICE)){
+		zoneMapPtr->zoneReg[zoneID].Zone_State = FULL;
+	}
+
+    return 1;
 }
 
 void ZNS_ReqTransSliceToLowLeve(){

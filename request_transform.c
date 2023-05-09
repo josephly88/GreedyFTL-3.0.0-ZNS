@@ -81,6 +81,9 @@ void InitDependencyTable()
 void ReqTransNvmeToSlice(unsigned int cmdSlotTag, unsigned int startLba, unsigned int nlb, unsigned int cmdCode)
 {
 	unsigned int reqSlotTag, requestedNvmeBlock, tempNumOfNvmeBlock, transCounter, tempLsa, loop, nvmeBlockOffset, nvmeDmaStartIndex, reqCode;
+	
+	P_ZONE_MAP zoneMapPtr = (P_ZONE_MAP) ZONE_MAP_ADDR;
+	ZONE_ID_EXTRACTOR zoneIDExtr;
 
 	requestedNvmeBlock = nlb + 1;
 	transCounter = 0;
@@ -96,7 +99,7 @@ void ReqTransNvmeToSlice(unsigned int cmdSlotTag, unsigned int startLba, unsigne
 		assert(!"[WARNING] Not supported command code [WARNING]");
 
 	if(ZNS_IO_COMMAND_SET && cmdCode == IO_NVM_WRITE){
-		if(ZoneWriteCheck(startLba) == 0)
+		if(ZoneWriteCheck(startLba, loop) == 0)
 			return;
 	}
 
@@ -163,6 +166,11 @@ void ReqTransNvmeToSlice(unsigned int cmdSlotTag, unsigned int startLba, unsigne
 	reqPoolPtr->reqPool[reqSlotTag].nvmeDmaInfo.numOfNvmeBlock = tempNumOfNvmeBlock;
 
 	PutToSliceReqQ(reqSlotTag);
+
+	if(ZNS_IO_COMMAND_SET && cmdCode == IO_NVM_WRITE){
+		if(ZoneWriteCheck(tempLsa, loop) == 0)
+			return;
+	}
 }
 
 
