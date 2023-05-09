@@ -43,6 +43,7 @@ int ZoneWriteCheck(unsigned int slba, unsigned int numOfSlice){
 
 void ZNS_ReqTransSliceToLowLeve(){
 
+	/*
     unsigned int reqSlotTag, dataBufEntry;
 
 	while(sliceReqQ.headReq != REQ_SLOT_TAG_NONE)
@@ -95,4 +96,5 @@ void ZNS_ReqTransSliceToLowLeve(){
 		UpdateDataBufEntryInfoBlockingReq(dataBufEntry, reqSlotTag);
 		SelectLowLevelReqQ(reqSlotTag);
 	}
+	*/
 }

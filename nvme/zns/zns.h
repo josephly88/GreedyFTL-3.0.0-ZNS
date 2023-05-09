@@ -1,7 +1,7 @@
 #ifndef __ZNS_H_
 #define __ZNS_H_
 
-#define ZNS_IO_COMMAND_SET									1
+#define ZNS_IO_COMMAND_SET									0
 
 /*Opcodes for ZNS IO Commands */
 #define IO_ZNS_MANAGEMENT_SEND								0x79

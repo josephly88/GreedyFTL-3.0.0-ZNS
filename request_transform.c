@@ -82,9 +82,6 @@ void ReqTransNvmeToSlice(unsigned int cmdSlotTag, unsigned int startLba, unsigne
 {
 	unsigned int reqSlotTag, requestedNvmeBlock, tempNumOfNvmeBlock, transCounter, tempLsa, loop, nvmeBlockOffset, nvmeDmaStartIndex, reqCode;
 	
-	P_ZONE_MAP zoneMapPtr = (P_ZONE_MAP) ZONE_MAP_ADDR;
-	ZONE_ID_EXTRACTOR zoneIDExtr;
-
 	requestedNvmeBlock = nlb + 1;
 	transCounter = 0;
 	nvmeDmaStartIndex = 0;
@@ -101,7 +98,10 @@ void ReqTransNvmeToSlice(unsigned int cmdSlotTag, unsigned int startLba, unsigne
 	if(ZNS_IO_COMMAND_SET && cmdCode == IO_NVM_WRITE){
 		if(ZoneWriteCheck(startLba, loop) == 0)
 			return;
+		return;
 	}
+
+	xil_printf("ReqTransNvmeToSlice: startLba 0x%x, nlb %d, reqCode %d, tempLsa 0x%x, loop %d\r\n", startLba, nlb, reqCode, tempLsa, loop);
 
 	//first transform
 	nvmeBlockOffset = (startLba % NVME_BLOCKS_PER_SLICE);

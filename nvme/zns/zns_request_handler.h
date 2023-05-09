@@ -3,9 +3,7 @@
 
 #include "zns.h"
 
-int ZoneWriteCheck(unsigned int logicalSliceAddr);
-
-void ZoneWritePointerIncrement(unsigned int logicalSliceAddr);
+int ZoneWriteCheck(unsigned int slba, unsigned int numOfSlice);
 
 void ZNS_ReqTransSliceToLowLeve();
 

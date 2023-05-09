@@ -13,7 +13,7 @@ void InitZNS()
     int i;
     for (i = 0; i < MAXIMUM_ZONE_COUNT; i++){
         zoneMapPtr->zoneReg[i].Zone_ID = i;
-        zoneMapPtr->zoneReg[i].FBG = 0;
+        zoneMapPtr->zoneReg[i].OUTER_BLOCK_GROUP_ROW_ID = 0;
         zoneMapPtr->zoneReg[i].Zone_State = EMPTY;
         zoneMapPtr->zoneReg[i].Write_Pointer = i * ZONE_CAP;
     }
