@@ -55,6 +55,7 @@
 #include "ftl_config.h"
 
 #include "nvme/zns/zns.h"
+#include "nvme/zns/zns_request_handler.h"
 
 P_ROW_ADDR_DEPENDENCY_TABLE rowAddrDependencyTablePtr;
 
@@ -95,7 +96,7 @@ void ReqTransNvmeToSlice(unsigned int cmdSlotTag, unsigned int startLba, unsigne
 		assert(!"[WARNING] Not supported command code [WARNING]");
 
 	if(ZNS_IO_COMMAND_SET && cmdCode == IO_NVM_WRITE){
-		if(zoneWriteCheck(startLba) == 0)
+		if(ZoneWriteCheck(startLba) == 0)
 			return;
 	}
 

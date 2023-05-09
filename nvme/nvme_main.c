@@ -67,7 +67,9 @@
 #include "nvme_io_cmd.h"
 
 #include "../memory_map.h"
+
 #include "zns/zns.h"
+#include "zns/zns_request_handler.h"
 
 volatile NVME_CONTEXT g_nvmeTask;
 
