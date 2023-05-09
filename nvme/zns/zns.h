@@ -7,9 +7,8 @@
 #define IO_ZNS_MANAGEMENT_SEND								0x79
 #define IO_ZNS_MANAGEMENT_RECEIVE							0x7A
 
-#define ZONE_CAP                            32768 // 32768 * 4096 = 128MB
-
-#define MAXIMUM_ZONE_COUNT                  8   // 8 * 128MB = 1TB
+#define ZONE_CAP											524288		// 2GB / 4KB (NVMe Block Size)
+#define MAXIMUM_ZONE_COUNT                  				1 			// 1073741824 / ZONE_SIZE		// 1TB / Zone size 
 
 /* Zone Descriptor - Zone State (ZS) */
 #define EMPTY												0x1
@@ -28,17 +27,18 @@
 #define OFFLINE_ZONE										0x5
 #define SET_ZONE_DESCRIPTOR_EXTENSION						0x10
 
-// Temporarily Zone Size: 128MB (4KB * (1 << (2+6+7)))
+// Temporarily Zone Size: 2GB
 typedef struct _ZNS_ADDR
 {
     union{
         unsigned int dword;
         struct{
-            unsigned int PAGE_OFFSET        :2;    // Page size: 16384KB -> 14 bits
-            unsigned int PAGE_COLUMN_ID     :6;     // # way * # ch / 2^(# FCG - 1) : 8 * 8 / 2 ^ 0 = 64 -> 6 bits
-            unsigned int PAGE_ROW_ID        :7;     // # pages in a block : 128 -> 7 bits
-            //unsigned int FCG_ID             :0;   // # FCG - 1 : (1-1) = 0
-            unsigned int FBG_ID             :17;     // 32 - the bits above
+			// A Block Layer is 128 MB if spaning all the channels x die (15-bits)
+			unsigned int PAGE_COLUMN_ID     			:6;     	// # way * # ch / 2^(# FCG - 1) : 8 * 8 / 2 ^ 0 = 64 -> 6 bits
+            unsigned int PAGE_ROW_ID        			:7;     	// # pages in a block : 128 -> 7 bits
+            //unsigned int FCG_ID             :0;   	// # FCG - 1 : (1-1) = 0
+		unsigned int INTER_BLOCK_ROW_ID					:4;			// 2GB / 128MB = 16 -> 4 bits
+            unsigned int OUTER_BLOCK_ROW_ID 			:15;     	// 32 - the bits above (Actually 1TB/2GB = 512 -> 9 bits is really using)
         };
     };
 }ZNS_ADDR;
@@ -50,6 +50,19 @@ typedef struct _ZONE_REG
     unsigned char Zone_State;
     unsigned int Write_Pointer;
 } ZONE_REG, *P_ZONE_REG;
+
+// Zone ID Extractor
+typedef struct _ZONE_ID_EXTRACTOR
+{
+    union{
+        unsigned int dword;
+        struct{
+			// A Block Layer is 128 MB if spaning all the channels x die (15-bits)
+            unsigned int reserved0	        			:17;
+            unsigned int ZONE_ID			 			:15;     	// 32 - the bits above (Actually 1TB/2GB = 512 -> 9 bits is really using)
+        };
+    };
+}ZONE_ID_EXTRACTOR;
 
 typedef struct _ZONE_MAP
 {
