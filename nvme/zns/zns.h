@@ -37,8 +37,8 @@ typedef struct _ZNS_ADDR
 			unsigned int PAGE_COLUMN_ID     			:6;     	// # way * # ch / 2^(# FCG - 1) : 8 * 8 / 2 ^ 0 = 64 -> 6 bits
             unsigned int PAGE_ROW_ID        			:7;     	// # pages in a block : 128 -> 7 bits
             //unsigned int FCG_ID             :0;   	// # FCG - 1 : (1-1) = 0
-		unsigned int INNER_BLOCK_ROW_ID					:4;			// 2GB / 128MB = 16 -> 4 bits
-            unsigned int OUTER_BLOCK_ROW_ID 			:15;     	// 32 - the bits above (Actually 1TB/2GB = 512 -> 9 bits is really using)
+			unsigned int INNER_BLOCK_GROUP_ROW_ID		:4;			// 2GB / 128MB = 16 -> 4 bits
+            unsigned int OUTER_BLOCK_GROUP_ROW_ID 		:15;     	// 32 - the bits above (Actually 1TB/2GB = 512 -> 9 bits is really using)
         };
     };
 }ZNS_ADDR;
@@ -46,7 +46,7 @@ typedef struct _ZNS_ADDR
 typedef struct _ZONE_REG
 {
     unsigned int Zone_ID;
-    unsigned int FBG;
+    unsigned int OUTER_BLOCK_GROUP_ROW_ID;
     unsigned char Zone_State;
     unsigned int Write_Pointer;
 } ZONE_REG, *P_ZONE_REG;
