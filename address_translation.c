@@ -242,8 +242,8 @@ void InitBlockMap()
 			else{
 				// Blocks reserved for ZNS
 				if(ZNS_IO_COMMAND_SET == 1){
-					GroupNo = virtualBlockNo / BLOCK_LAYER_PER_GROUP;
-					if(GroupNo >= ZONE_GROUP_START && GroupNo < ZONE_GROUP_END)
+					GroupNo = virtualBlockNo / BLOCK_LAYER_PER_BLOCK_GROUP;
+					if(GroupNo >= ZONE_BLOCK_GROUP_START && GroupNo < ZONE_BLOCK_GROUP_END)
 						continue;
 				}
 				PutToFbList(dieNo, virtualBlockNo);
@@ -811,7 +811,7 @@ void EraseBlock(unsigned int dieNo, unsigned int blockNo)
 	virtualBlockMapPtr->block[dieNo][blockNo].invalidSliceCnt = 0;
 	virtualBlockMapPtr->block[dieNo][blockNo].currentPage = 0;
 
-	if(ZNS_IO_COMMAND_SET == 0 || ((blockNo / BLOCK_LAYER_PER_GROUP) < ZONE_GROUP_START || (blockNo / BLOCK_LAYER_PER_GROUP) >= ZONE_GROUP_END))
+	if(ZNS_IO_COMMAND_SET == 0 || ((blockNo / BLOCK_LAYER_PER_BLOCK_GROUP) < ZONE_BLOCK_GROUP_START || (blockNo / BLOCK_LAYER_PER_BLOCK_GROUP) >= ZONE_BLOCK_GROUP_END))
 		PutToFbList(dieNo, blockNo);
 
 	for(pageNo=0; pageNo<USER_PAGES_PER_BLOCK; pageNo++)
