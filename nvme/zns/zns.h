@@ -8,21 +8,28 @@
 /* NVME_BLOCKS_PER_ZONE: Zone Capacity */
 #define MB_PER_ZONE											(2*1024)		// 2GB
 #define NVME_BLOCKS_PER_ZONE								((MB_PER_ZONE * 1024) / (BYTES_PER_NVME_BLOCK / 1024))		// 2GB / 4KB (NVMe Block Size)
+#define SLICE_PER_ZONE										(NVME_BLOCKS_PER_ZONE / NVME_BLOCKS_PER_SLICE)
 
 /* Zone NVMe LBA Range */
 #define MAXIMUM_ZONE_COUNT                  				1 				// 1073741824 / ZONE_SIZE		// 1TB / Zone size 
 #define ZNS_LBA_START										0x8000000	// 0.5 TB / 4KB (NVMe Block Size)
 #define ZNS_LBA_END											(ZNS_LBA_START + (MAXIMUM_ZONE_COUNT * NVME_BLOCKS_PER_ZONE))
+#define ZNS_LSA_START										(ZNS_LBA_START / NVME_BLOCKS_PER_SLICE)
+#define ZNS_LSA_END											(ZNS_LBA_END / NVME_BLOCKS_PER_SLICE)
 
 /* Zone Group: # of Flash Block */
 #define BLOCK_GROUP_PER_SSD									(1024*1024 / MB_PER_ZONE)		// 1TB / 2GB = 512
 #define BLOCK_LAYER_PER_BLOCK_GROUP							(USER_BLOCKS_PER_DIE / BLOCK_GROUP_PER_SSD)
 
+#define SLICE_PER_STRIPE									(USER_DIES)
+#define SLICE_PER_BLOCK_LAYER								(USER_DIES * SLICES_PER_BLOCK)
+#define SLICE_PER_BLOCK_GROUP								(BLOCK_LAYER_PER_BLOCK_GROUP * SLICE_PER_BLOCK_LAYER)
+
 #define ZONE_BLOCK_GROUP_START								256
 #define ZONE_BLOCK_GROUP_END								(ZONE_BLOCK_GROUP_START + MAXIMUM_ZONE_COUNT)
 
 /* Zone Data Buffer Range */
-#define AVAILABLE_ZNS_DATA_BUFFER_ENTRY_COUNT				(MAXIMUM_ZONE_COUNT * USER_DIES * 2)
+#define AVAILABLE_ZNS_DATA_BUFFER_ENTRY_COUNT				(MAXIMUM_ZONE_COUNT * SLICE_PER_STRIPE * 2)
 
 /*Opcodes for ZNS IO Commands */
 #define IO_ZNS_MANAGEMENT_SEND								0x79
@@ -44,6 +51,8 @@
 #define RESET_ZONE											0x4
 #define OFFLINE_ZONE										0x5
 #define SET_ZONE_DESCRIPTOR_EXTENSION						0x10
+
+#define Lsa2ZoneId(logicalSliceAddr)						((logicalSliceAddr / SLICE_PER_ZONE) - ZONE_BLOCK_GROUP_START)
 
 // Temporarily Zone Size: 2GB
 typedef struct _ZNS_ADDR
@@ -68,6 +77,7 @@ typedef struct _ZONE_REG
     unsigned char Zone_State;
 	unsigned int SLBA;
     unsigned int Write_Pointer;
+	unsigned int Buffer_Idx;
 } ZONE_REG;
 
 // Zone ID Extractor, similar to ZNS_ADDR

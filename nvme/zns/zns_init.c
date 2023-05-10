@@ -17,5 +17,6 @@ void InitZNS()
         zoneMapPtr->zoneReg[i].Zone_State = EMPTY;
         zoneMapPtr->zoneReg[i].SLBA = ZNS_LBA_START + i * NVME_BLOCKS_PER_ZONE;
         zoneMapPtr->zoneReg[i].Write_Pointer = zoneMapPtr->zoneReg[i].SLBA;
+        zoneMapPtr->zoneReg[i].Buffer_Idx = 0;
     }
 }
