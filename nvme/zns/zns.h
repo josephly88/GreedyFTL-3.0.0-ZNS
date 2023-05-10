@@ -1,14 +1,23 @@
 #ifndef __ZNS_H_
 #define __ZNS_H_
 
-#define ZNS_IO_COMMAND_SET									0
+#include "../../ftl_config.h"
+
+#define ZNS_IO_COMMAND_SET									1
+
+/* Zone Capacity: # of NVMe Block */
+#define ZONE_CAP											524288		// 2GB / 4KB (NVMe Block Size)
+#define MAXIMUM_ZONE_COUNT                  				1 			// 1073741824 / ZONE_SIZE		// 1TB / Zone size 
+/* Zone Group: # of Flash Block */
+#define TOTAL_GROUP_OF_LAYER								512			// 1TB / 2GB = 512
+#define BLOCK_LAYER_PER_GROUP								(USER_BLOCKS_PER_DIE / TOTAL_GROUP_OF_LAYER)
+
+#define ZONE_GROUP_START									256
+#define ZONE_GROUP_END										257
 
 /*Opcodes for ZNS IO Commands */
 #define IO_ZNS_MANAGEMENT_SEND								0x79
 #define IO_ZNS_MANAGEMENT_RECEIVE							0x7A
-
-#define ZONE_CAP											524288		// 2GB / 4KB (NVMe Block Size)
-#define MAXIMUM_ZONE_COUNT                  				1 			// 1073741824 / ZONE_SIZE		// 1TB / Zone size 
 
 /* Zone Descriptor - Zone State (ZS) */
 #define EMPTY												0x1

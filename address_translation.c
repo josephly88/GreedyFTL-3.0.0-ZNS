@@ -49,6 +49,8 @@
 #include "memory_map.h"
 #include "xil_printf.h"
 
+#include "nvme/zns/zns.h"
+
 P_LOGICAL_SLICE_MAP logicalSliceMapPtr;
 P_VIRTUAL_SLICE_MAP virtualSliceMapPtr;
 P_VIRTUAL_BLOCK_MAP virtualBlockMapPtr;
@@ -216,11 +218,13 @@ void InitDieMap()
 void InitBlockMap()
 {
 	unsigned int dieNo, phyBlockNo, virtualBlockNo, remappedPhyBlock;
+	unsigned int GroupNo;
 
 	for(dieNo=0 ; dieNo<USER_DIES ; dieNo++)
 	{
 		for(virtualBlockNo=0; virtualBlockNo<USER_BLOCKS_PER_DIE ; virtualBlockNo++)
 		{
+
 			phyBlockNo = Vblock2PblockOfTbsTranslation(virtualBlockNo);
 			remappedPhyBlock = phyBlockMapPtr->phyBlock[dieNo][phyBlockNo].remappedPhyBlock;
 			virtualBlockMapPtr->block[dieNo][virtualBlockNo].bad = phyBlockMapPtr->phyBlock[dieNo][remappedPhyBlock].bad;
@@ -235,8 +239,15 @@ void InitBlockMap()
 				virtualBlockMapPtr->block[dieNo][virtualBlockNo].prevBlock = BLOCK_NONE;
 				virtualBlockMapPtr->block[dieNo][virtualBlockNo].nextBlock = BLOCK_NONE;
 			}
-			else
+			else{
+				// Blocks reserved for ZNS
+				if(ZNS_IO_COMMAND_SET == 1){
+					GroupNo = virtualBlockNo / BLOCK_LAYER_PER_GROUP;
+					if(GroupNo >= ZONE_GROUP_START && GroupNo < ZONE_GROUP_END)
+						continue;
+				}
 				PutToFbList(dieNo, virtualBlockNo);
+			}
 		}
 	}
 }
@@ -800,7 +811,8 @@ void EraseBlock(unsigned int dieNo, unsigned int blockNo)
 	virtualBlockMapPtr->block[dieNo][blockNo].invalidSliceCnt = 0;
 	virtualBlockMapPtr->block[dieNo][blockNo].currentPage = 0;
 
-	PutToFbList(dieNo, blockNo);
+	if(ZNS_IO_COMMAND_SET == 0 || ((blockNo / BLOCK_LAYER_PER_GROUP) < ZONE_GROUP_START || (blockNo / BLOCK_LAYER_PER_GROUP) >= ZONE_GROUP_END))
+		PutToFbList(dieNo, blockNo);
 
 	for(pageNo=0; pageNo<USER_PAGES_PER_BLOCK; pageNo++)
 	{

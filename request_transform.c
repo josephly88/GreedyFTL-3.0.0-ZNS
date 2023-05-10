@@ -95,11 +95,13 @@ void ReqTransNvmeToSlice(unsigned int cmdSlotTag, unsigned int startLba, unsigne
 	else
 		assert(!"[WARNING] Not supported command code [WARNING]");
 
+	/*
 	if(ZNS_IO_COMMAND_SET && cmdCode == IO_NVM_WRITE){
 		if(ZoneWriteCheck(startLba, loop) == 0)
 			return;
-		return;
 	}
+	*/
+
 
 	xil_printf("ReqTransNvmeToSlice: startLba 0x%x, nlb %d, reqCode %d, tempLsa 0x%x, loop %d\r\n", startLba, nlb, reqCode, tempLsa, loop);
 
@@ -166,11 +168,6 @@ void ReqTransNvmeToSlice(unsigned int cmdSlotTag, unsigned int startLba, unsigne
 	reqPoolPtr->reqPool[reqSlotTag].nvmeDmaInfo.numOfNvmeBlock = tempNumOfNvmeBlock;
 
 	PutToSliceReqQ(reqSlotTag);
-
-	if(ZNS_IO_COMMAND_SET && cmdCode == IO_NVM_WRITE){
-		if(ZoneWriteCheck(tempLsa, loop) == 0)
-			return;
-	}
 }
 
 
