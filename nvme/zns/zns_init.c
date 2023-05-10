@@ -15,6 +15,6 @@ void InitZNS()
         zoneMapPtr->zoneReg[i].Zone_ID = i;
         zoneMapPtr->zoneReg[i].OUTER_BLOCK_GROUP_ROW_ID = 0;
         zoneMapPtr->zoneReg[i].Zone_State = EMPTY;
-        zoneMapPtr->zoneReg[i].Write_Pointer = i * ZONE_CAP;
+        zoneMapPtr->zoneReg[i].Write_Pointer = ZNS_LBA_START + i * ZONE_CAP;
     }
 }

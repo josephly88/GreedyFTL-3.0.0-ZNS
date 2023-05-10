@@ -11,9 +11,13 @@
 /* Zone Group: # of Flash Block */
 #define TOTAL_GROUP_OF_LAYER								512			// 1TB / 2GB = 512
 #define BLOCK_LAYER_PER_GROUP								(USER_BLOCKS_PER_DIE / TOTAL_GROUP_OF_LAYER)
+#define BTYE_PER_BLOCK_LAYER								((unsigned int)USER_DIES * BYTES_PER_DATA_REGION_OF_PAGE * USER_PAGES_PER_BLOCK * BLOCK_LAYER_PER_GROUP)
 
 #define ZONE_GROUP_START									256
-#define ZONE_GROUP_END										257
+#define ZONE_GROUP_END										(ZONE_GROUP_START + MAXIMUM_ZONE_COUNT)
+
+#define ZNS_LBA_START										0x8000000	// 0.5 TB / 4KB (NVMe Block Size)
+#define ZNS_LBA_END											(ZNS_LBA_START + (MAXIMUM_ZONE_COUNT * ZONE_CAP))
 
 /*Opcodes for ZNS IO Commands */
 #define IO_ZNS_MANAGEMENT_SEND								0x79

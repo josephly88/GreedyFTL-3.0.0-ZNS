@@ -95,15 +95,14 @@ void ReqTransNvmeToSlice(unsigned int cmdSlotTag, unsigned int startLba, unsigne
 	else
 		assert(!"[WARNING] Not supported command code [WARNING]");
 
-	/*
 	if(ZNS_IO_COMMAND_SET && cmdCode == IO_NVM_WRITE){
-		if(ZoneWriteCheck(startLba, loop) == 0)
-			return;
+		if(startLba >= ZNS_LBA_START && startLba < ZNS_LBA_END){
+			if(ZoneWriteCheck(startLba, loop) == 0)
+				return;
+		}
 	}
-	*/
 
-
-	xil_printf("ReqTransNvmeToSlice: startLba 0x%x, nlb %d, reqCode %d, tempLsa 0x%x, loop %d\r\n", startLba, nlb, reqCode, tempLsa, loop);
+	//xil_printf("ReqTransNvmeToSlice: startLba 0x%x, nlb %d, reqCode %d, tempLsa 0x%x, loop %d\r\n", startLba, nlb, reqCode, tempLsa, loop);
 
 	//first transform
 	nvmeBlockOffset = (startLba % NVME_BLOCKS_PER_SLICE);
