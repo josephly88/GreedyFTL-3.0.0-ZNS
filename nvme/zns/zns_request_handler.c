@@ -51,7 +51,7 @@ int ZoneWriteCheck(unsigned int slba, unsigned int nlb){
     return 1;
 }
 
-void ZNS_ReqTransSliceToLowLeve(unsigned int reqSlotTag){
+void ZNS_ReqTransSliceToLowLevel(unsigned int reqSlotTag){
     unsigned int zoneID, dataBufEntry;
 
 	xil_printf("Catch a ZNS Request LogicalSliceAddr : 0x%x\r\n", reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr);

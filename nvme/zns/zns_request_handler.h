@@ -5,6 +5,6 @@
 
 int ZoneWriteCheck(unsigned int slba, unsigned int numOfSlice);
 
-void ZNS_ReqTransSliceToLowLeve(unsigned int reqSlotTag);
+void ZNS_ReqTransSliceToLowLevel(unsigned int reqSlotTag);
 
 #endif
