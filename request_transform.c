@@ -241,8 +241,7 @@ void ReqTransSliceToLowLevel()
 		if(reqSlotTag == REQ_SLOT_TAG_FAIL)
 			return ;
 
-		if(reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr >= (ZNS_LBA_START / NVME_BLOCKS_PER_SLICE)
-			&& reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr < (ZNS_LBA_END / NVME_BLOCKS_PER_SLICE)){
+		if(reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr >= ZNS_LSA_START && reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr < ZNS_LSA_END){
 				// ZNS Request
 				ZNS_ReqTransSliceToLowLeve(reqSlotTag);
 		}
