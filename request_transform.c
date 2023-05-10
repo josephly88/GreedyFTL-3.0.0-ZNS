@@ -205,7 +205,7 @@ void DataReadFromNand(unsigned int originReqSlotTag)
 {
 	unsigned int reqSlotTag, virtualSliceAddr;
 
-	virtualSliceAddr =  AddrTransRead(reqPoolPtr->reqPool[originReqSlotTag].logicalSliceAddr);
+	virtualSliceAddr = AddrTransRead(reqPoolPtr->reqPool[originReqSlotTag].logicalSliceAddr);
 
 	if(virtualSliceAddr != VSA_FAIL)
 	{

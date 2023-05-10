@@ -9,4 +9,10 @@ unsigned int findDataBufForWrite(unsigned int zoneID);
 
 void ZNS_ReqTransSliceToLowLevel(unsigned int reqSlotTag);
 
+void ZNS_EvictDataBufStripe(unsigned int zoneID, unsigned int originReqSlotTag);
+
+void ZNS_DataReadFromNand(unsigned int originReqSlotTag);
+
+void ZNS_SelectLowLevelReqQ(unsigned int reqSlotTag);
+
 #endif

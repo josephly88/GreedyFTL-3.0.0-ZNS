@@ -56,6 +56,8 @@
 #define Lba2ZoneId(lba)										((lba / NVME_BLOCKS_PER_ZONE) - ZONE_BLOCK_GROUP_START)
 #define Lsa2ZoneId(logicalSliceAddr)						((logicalSliceAddr / SLICE_PER_ZONE) - ZONE_BLOCK_GROUP_START)
 
+#define Lsa2Lva(logicalSliceAddr)							(logicalSliceAddr)
+
 // Temporarily Zone Size: 2GB
 typedef struct _ZNS_ADDR
 {
