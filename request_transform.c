@@ -241,49 +241,56 @@ void ReqTransSliceToLowLevel()
 		if(reqSlotTag == REQ_SLOT_TAG_FAIL)
 			return ;
 
-		//allocate a data buffer entry for this request
-		dataBufEntry = CheckDataBufHit(reqSlotTag);
-		if(dataBufEntry != DATA_BUF_FAIL)
-		{
-			//data buffer hit
-			reqPoolPtr->reqPool[reqSlotTag].dataBufInfo.entry = dataBufEntry;
+		if(reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr >= (ZNS_LBA_START / NVME_BLOCKS_PER_SLICE)
+			&& reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr < (ZNS_LBA_END / NVME_BLOCKS_PER_SLICE)){
+				// ZNS Request
+				ZNS_ReqTransSliceToLowLeve(reqSlotTag);
 		}
-		else
-		{
-			//data buffer miss, allocate a new buffer entry
-			dataBufEntry = AllocateDataBuf();
-			reqPoolPtr->reqPool[reqSlotTag].dataBufInfo.entry = dataBufEntry;
+		else{
+			//allocate a data buffer entry for this request
+			dataBufEntry = CheckDataBufHit(reqSlotTag);
+			if(dataBufEntry != DATA_BUF_FAIL)
+			{
+				//data buffer hit
+				reqPoolPtr->reqPool[reqSlotTag].dataBufInfo.entry = dataBufEntry;
+			}
+			else
+			{
+				//data buffer miss, allocate a new buffer entry
+				dataBufEntry = AllocateDataBuf();
+				reqPoolPtr->reqPool[reqSlotTag].dataBufInfo.entry = dataBufEntry;
 
-			//clear the allocated data buffer entry being used by a previous request
-			EvictDataBufEntry(reqSlotTag);
+				//clear the allocated data buffer entry being used by a previous request
+				EvictDataBufEntry(reqSlotTag);
 
-			//update meta-data of the allocated data buffer entry
-			dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr = reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr;
-			PutToDataBufHashList(dataBufEntry);
+				//update meta-data of the allocated data buffer entry
+				dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr = reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr;
+				PutToDataBufHashList(dataBufEntry);
 
-			if(reqPoolPtr->reqPool[reqSlotTag].reqCode  == REQ_CODE_READ)
-				DataReadFromNand(reqSlotTag);
-			else if(reqPoolPtr->reqPool[reqSlotTag].reqCode  == REQ_CODE_WRITE)
-				if(reqPoolPtr->reqPool[reqSlotTag].nvmeDmaInfo.numOfNvmeBlock != NVME_BLOCKS_PER_SLICE) //for read modify write
+				if(reqPoolPtr->reqPool[reqSlotTag].reqCode  == REQ_CODE_READ)
 					DataReadFromNand(reqSlotTag);
-		}
+				else if(reqPoolPtr->reqPool[reqSlotTag].reqCode  == REQ_CODE_WRITE)
+					if(reqPoolPtr->reqPool[reqSlotTag].nvmeDmaInfo.numOfNvmeBlock != NVME_BLOCKS_PER_SLICE) //for read modify write
+						DataReadFromNand(reqSlotTag);
+			}
 
-		//transform this slice request to nvme request
-		if(reqPoolPtr->reqPool[reqSlotTag].reqCode  == REQ_CODE_WRITE)
-		{
-			dataBufMapPtr->dataBuf[dataBufEntry].dirty = DATA_BUF_DIRTY;
-			reqPoolPtr->reqPool[reqSlotTag].reqCode = REQ_CODE_RxDMA;
-		}
-		else if(reqPoolPtr->reqPool[reqSlotTag].reqCode  == REQ_CODE_READ)
-			reqPoolPtr->reqPool[reqSlotTag].reqCode = REQ_CODE_TxDMA;
-		else
-			assert(!"[WARNING] Not supported reqCode. [WARNING]");
+			//transform this slice request to nvme request
+			if(reqPoolPtr->reqPool[reqSlotTag].reqCode  == REQ_CODE_WRITE)
+			{
+				dataBufMapPtr->dataBuf[dataBufEntry].dirty = DATA_BUF_DIRTY;
+				reqPoolPtr->reqPool[reqSlotTag].reqCode = REQ_CODE_RxDMA;
+			}
+			else if(reqPoolPtr->reqPool[reqSlotTag].reqCode  == REQ_CODE_READ)
+				reqPoolPtr->reqPool[reqSlotTag].reqCode = REQ_CODE_TxDMA;
+			else
+				assert(!"[WARNING] Not supported reqCode. [WARNING]");
 
-		reqPoolPtr->reqPool[reqSlotTag].reqType = REQ_TYPE_NVME_DMA;
-		reqPoolPtr->reqPool[reqSlotTag].reqOpt.dataBufFormat = REQ_OPT_DATA_BUF_ENTRY;
+			reqPoolPtr->reqPool[reqSlotTag].reqType = REQ_TYPE_NVME_DMA;
+			reqPoolPtr->reqPool[reqSlotTag].reqOpt.dataBufFormat = REQ_OPT_DATA_BUF_ENTRY;
 
-		UpdateDataBufEntryInfoBlockingReq(dataBufEntry, reqSlotTag);
-		SelectLowLevelReqQ(reqSlotTag);
+			UpdateDataBufEntryInfoBlockingReq(dataBufEntry, reqSlotTag);
+			SelectLowLevelReqQ(reqSlotTag);
+		}		
 	}
 }
 

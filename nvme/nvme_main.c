@@ -115,13 +115,8 @@ void nvme_main()
 				}
 				else
 				{
-					handle_nvme_io_cmd(&nvmeCmd);
-					/*
-					if(ZNS_IO_COMMAND_SET)
-						ZNS_ReqTransSliceToLowLeve();	
-					else
-					*/
-						ReqTransSliceToLowLevel();	
+					handle_nvme_io_cmd(&nvmeCmd);					
+					ReqTransSliceToLowLevel();	
 					exeLlr=0;
 				}
 			}
