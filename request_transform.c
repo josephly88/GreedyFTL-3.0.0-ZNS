@@ -97,7 +97,7 @@ void ReqTransNvmeToSlice(unsigned int cmdSlotTag, unsigned int startLba, unsigne
 
 	if(ZNS_IO_COMMAND_SET && cmdCode == IO_NVM_WRITE){
 		if(startLba >= ZNS_LBA_START && startLba < ZNS_LBA_END){
-			if(ZoneWriteCheck(startLba, loop) == 0)
+			if(ZoneWriteCheck(startLba, nlb + 1) == 0)
 				return;
 		}
 	}

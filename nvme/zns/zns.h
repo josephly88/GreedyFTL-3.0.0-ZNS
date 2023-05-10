@@ -52,6 +52,7 @@
 #define OFFLINE_ZONE										0x5
 #define SET_ZONE_DESCRIPTOR_EXTENSION						0x10
 
+#define Lba2ZoneId(lba)										((lba / NVME_BLOCKS_PER_ZONE) - ZONE_BLOCK_GROUP_START)
 #define Lsa2ZoneId(logicalSliceAddr)						((logicalSliceAddr / SLICE_PER_ZONE) - ZONE_BLOCK_GROUP_START)
 
 // Temporarily Zone Size: 2GB
@@ -79,19 +80,6 @@ typedef struct _ZONE_REG
     unsigned int Write_Pointer;
 	unsigned int Buffer_Idx;
 } ZONE_REG;
-
-// Zone ID Extractor, similar to ZNS_ADDR
-typedef struct _ZONE_ID_EXTRACTOR_SLBA
-{
-    union{
-        unsigned int dword;
-        struct{
-			// A Block Layer is 128 MB if spaning all the channels x die (15-bits)
-            unsigned int reserved0	        			:19;
-            unsigned int ZONE_ID			 			:13;     	// 32 - the bits above (Actually 1TB/2GB = 512 -> 9 bits is really using)
-        };
-    };
-} ZONE_ID_EXTRACTOR_SLBA;
 
 typedef struct _ZONE_MAP
 {

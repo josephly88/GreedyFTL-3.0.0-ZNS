@@ -8,13 +8,12 @@
 #include "../../memory_map.h"
 #include "../../ftl_config.h"
 
-int ZoneWriteCheck(unsigned int slba, unsigned int numOfSlice){
+int ZoneWriteCheck(unsigned int slba, unsigned int nlb){
 
     P_ZONE_MAP zoneMapPtr = (P_ZONE_MAP) ZONE_MAP_ADDR;
+	ZONE_REG zoneReg;
 
-    ZONE_ID_EXTRACTOR_SLBA zoneIDExtr;
-	zoneIDExtr.dword = slba;
-	unsigned int zoneID = zoneIDExtr.ZONE_ID;
+	unsigned int zoneID = Lba2ZoneId(slba);
 	
 	// Zone ID Check
 	if(zoneID < 0 || zoneID >= MAXIMUM_ZONE_COUNT){
@@ -22,28 +21,30 @@ int ZoneWriteCheck(unsigned int slba, unsigned int numOfSlice){
 		return 0;
 	}
 
+	zoneReg = zoneMapPtr->zoneReg[zoneID];
+
 	// Zone State Check
-	unsigned char zoneState = zoneMapPtr->zoneReg[zoneID].Zone_State;
-	if(zoneState != IMPLICITLY_OPENED && zoneState != EXPLICITLY_OPENED && zoneState != CLOSED && zoneState != EMPTY){
-		xil_printf("Zone State Error: %d\r\n", zoneState);
+	if(zoneReg.Zone_State != IMPLICITLY_OPENED && zoneReg.Zone_State != EXPLICITLY_OPENED
+	 && zoneReg.Zone_State != CLOSED && zoneReg.Zone_State != EMPTY){
+		xil_printf("Zone State Error: %d\r\n", zoneReg.Zone_State);
 		return 0;
 	}
 	
 	// Sequential Write Check
-	if(zoneMapPtr->zoneReg[zoneID].Write_Pointer != slba){
-		xil_printf("Sequential Write Error: WP: %x SLBA: %x\r\n", zoneMapPtr->zoneReg[zoneID].Write_Pointer, slba);
+	if(zoneReg.Write_Pointer != slba){
+		xil_printf("Sequential Write Error: WP: %x SLBA: %x\r\n", zoneReg.Write_Pointer, slba);
 		return 0;
 	}
 
 	// Out-of-Bound Check
-	if(zoneMapPtr->zoneReg[zoneID].Write_Pointer + numOfSlice*4 > (zoneID + 1) * (NVME_BLOCKS_PER_ZONE/NVME_BLOCKS_PER_SLICE)){
-		xil_printf("Out-of-Bound Error: WP: %x SLBA: %x numOfSlice : %d\r\n", zoneMapPtr->zoneReg[zoneID].Write_Pointer, slba, numOfSlice*4);
+	if(zoneReg.Write_Pointer + nlb > zoneReg.SLBA + NVME_BLOCKS_PER_ZONE){
+		xil_printf("Out-of-Bound Error: WP: %x SLBA: %x nlb+1 : %d\r\n", zoneReg.Write_Pointer, slba, nlb);
 		return 0;
 	}
 
 	// Increment the write pointer
-	zoneMapPtr->zoneReg[zoneID].Write_Pointer += numOfSlice*4;
-	if(zoneMapPtr->zoneReg[zoneID].Write_Pointer == (zoneID + 1) * (NVME_BLOCKS_PER_ZONE/NVME_BLOCKS_PER_SLICE)){
+	zoneReg.Write_Pointer += nlb;
+	if(zoneReg.Write_Pointer == zoneReg.SLBA + NVME_BLOCKS_PER_ZONE - 1){
 		zoneMapPtr->zoneReg[zoneID].Zone_State = FULL;
 	}
 
@@ -51,7 +52,10 @@ int ZoneWriteCheck(unsigned int slba, unsigned int numOfSlice){
 }
 
 void ZNS_ReqTransSliceToLowLeve(unsigned int reqSlotTag){
-    //unsigned int dataBufEntry;
+    unsigned int zoneID, dataBufEntry;
 
 	xil_printf("Catch a ZNS Request LogicalSliceAddr : 0x%x\r\n", reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr);
+
+	zoneID = Lsa2ZoneId(reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr);
+	xil_printf("Zone ID : %d\r\n", zoneID);
 }
