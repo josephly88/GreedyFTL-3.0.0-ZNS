@@ -16,21 +16,29 @@ int ZoneWriteCheck(unsigned int slba, unsigned int numOfSlice){
 	unsigned int zoneID = zoneIDExtr.ZONE_ID;
 	
 	// Zone ID Check
-	if(zoneID < 0 || zoneID >= MAXIMUM_ZONE_COUNT)
+	if(zoneID < 0 || zoneID >= MAXIMUM_ZONE_COUNT){
+		xil_printf("Zone ID Error: %d\r\n", zoneID);
 		return 0;
+	}
 
 	// Zone State Check
 	unsigned char zoneState = zoneMapPtr->zoneReg[zoneID].Zone_State;
-	if(zoneState != IMPLICITLY_OPENED && zoneState != EXPLICITLY_OPENED && zoneState != CLOSED && zoneState != EMPTY)
+	if(zoneState != IMPLICITLY_OPENED && zoneState != EXPLICITLY_OPENED && zoneState != CLOSED && zoneState != EMPTY){
+		xil_printf("Zone State Error: %d\r\n", zoneState);
 		return 0;
+	}
 	
 	// Sequential Write Check
-	if(zoneMapPtr->zoneReg[zoneID].Write_Pointer != slba)
+	if(zoneMapPtr->zoneReg[zoneID].Write_Pointer != slba){
+		xil_printf("Sequential Write Error: WP: %x SLBA: %x\r\n", zoneMapPtr->zoneReg[zoneID].Write_Pointer, slba);
 		return 0;
+	}
 
 	// Out-of-Bound Check
-	if(zoneMapPtr->zoneReg[zoneID].Write_Pointer + numOfSlice*4 > (zoneID + 1) * (ZONE_CAP/NVME_BLOCKS_PER_SLICE))
-		return 0; 
+	if(zoneMapPtr->zoneReg[zoneID].Write_Pointer + numOfSlice*4 > (zoneID + 1) * (ZONE_CAP/NVME_BLOCKS_PER_SLICE)){
+		xil_printf("Out-of-Bound Error: WP: %x SLBA: %x numOfSlice : %d\r\n", zoneMapPtr->zoneReg[zoneID].Write_Pointer, slba, numOfSlice*4);
+		return 0;
+	}
 
 	// Increment the write pointer
 	zoneMapPtr->zoneReg[zoneID].Write_Pointer += numOfSlice*4;
