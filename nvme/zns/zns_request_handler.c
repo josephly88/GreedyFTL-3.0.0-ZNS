@@ -44,8 +44,11 @@ int ZoneWriteCheck(unsigned int slba, unsigned int nlb){
 	}
 
 	// Increment the write pointer
-	zoneReg.Write_Pointer += nlb;
-	if(zoneReg.Write_Pointer == zoneReg.SLBA + NVME_BLOCKS_PER_ZONE - 1){
+	zoneMapPtr->zoneReg[zoneID].Write_Pointer += nlb;
+	if(zoneMapPtr->zoneReg[zoneID].Zone_State == EMPTY){
+		zoneMapPtr->zoneReg[zoneID].Zone_State = IMPLICITLY_OPENED;
+	}
+	if(zoneMapPtr->zoneReg[zoneID].Write_Pointer == zoneReg.SLBA + NVME_BLOCKS_PER_ZONE - 1){
 		zoneMapPtr->zoneReg[zoneID].Zone_State = FULL;
 	}
 

@@ -102,8 +102,6 @@ void ReqTransNvmeToSlice(unsigned int cmdSlotTag, unsigned int startLba, unsigne
 		}
 	}
 
-	//xil_printf("ReqTransNvmeToSlice: startLba 0x%x, nlb %d, reqCode %d, tempLsa 0x%x, loop %d\r\n", startLba, nlb, reqCode, tempLsa, loop);
-
 	//first transform
 	nvmeBlockOffset = (startLba % NVME_BLOCKS_PER_SLICE);
 	if(loop)
