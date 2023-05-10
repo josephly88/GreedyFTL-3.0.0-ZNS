@@ -5,6 +5,8 @@
 
 int ZoneWriteCheck(unsigned int slba, unsigned int numOfSlice);
 
+unsigned int findDataBufForWrite(unsigned int zoneID);
+
 void ZNS_ReqTransSliceToLowLevel(unsigned int reqSlotTag);
 
 #endif

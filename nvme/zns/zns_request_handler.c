@@ -8,8 +8,9 @@
 #include "../../memory_map.h"
 #include "../../ftl_config.h"
 
-int ZoneWriteCheck(unsigned int slba, unsigned int nlb){
+#include "../../data_buffer.h"
 
+int ZoneWriteCheck(unsigned int slba, unsigned int nlb){
     P_ZONE_MAP zoneMapPtr = (P_ZONE_MAP) ZONE_MAP_ADDR;
 	ZONE_REG zoneReg;
 
@@ -51,11 +52,20 @@ int ZoneWriteCheck(unsigned int slba, unsigned int nlb){
     return 1;
 }
 
+unsigned int findDataBufForWrite(unsigned int zoneID){
+	P_ZONE_MAP zoneMapPtr = (P_ZONE_MAP) ZONE_MAP_ADDR;
+
+	return AVAILABLE_DATA_BUFFER_ENTRY_COUNT + zoneID * DATA_BUFFER_ENTRY_COUNT_PER_ZONE + zoneMapPtr->zoneReg[zoneID].Buffer_Idx;
+}
+
 void ZNS_ReqTransSliceToLowLevel(unsigned int reqSlotTag){
     unsigned int zoneID, dataBufEntry;
 
 	xil_printf("Catch a ZNS Request LogicalSliceAddr : 0x%x\r\n", reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr);
 
 	zoneID = Lsa2ZoneId(reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr);
+	dataBufEntry = findDataBufForWrite(zoneID);
+
 	xil_printf("Zone ID : %d\r\n", zoneID);
+	xil_printf("Data Buffer Entry : %d\r\n", dataBufEntry);
 }

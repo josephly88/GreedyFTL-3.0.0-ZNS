@@ -243,7 +243,7 @@ void ReqTransSliceToLowLevel()
 
 		if(reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr >= ZNS_LSA_START && reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr < ZNS_LSA_END){
 				// ZNS Request
-				ZNS_ReqTransSliceToLowLeve(reqSlotTag);
+				ZNS_ReqTransSliceToLowLevel(reqSlotTag);
 		}
 		else{
 			//allocate a data buffer entry for this request
