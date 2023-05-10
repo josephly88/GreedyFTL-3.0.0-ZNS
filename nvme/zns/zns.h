@@ -5,9 +5,15 @@
 
 #define ZNS_IO_COMMAND_SET									1
 
-/* Zone Capacity: # of NVMe Block */
-#define ZONE_CAP											524288		// 2GB / 4KB (NVMe Block Size)
-#define MAXIMUM_ZONE_COUNT                  				1 			// 1073741824 / ZONE_SIZE		// 1TB / Zone size 
+/* NVME_BLOCKS_PER_ZONE: Zone Capacity */
+#define MB_PER_ZONE											(2*1024)		// 2GB
+#define NVME_BLOCKS_PER_ZONE								((MB_PER_ZONE * 1024) / (BYTES_PER_NVME_BLOCK / 1024))		// 2GB / 4KB (NVMe Block Size)
+
+/* Zone NVMe LBA Range */
+#define MAXIMUM_ZONE_COUNT                  				1 				// 1073741824 / ZONE_SIZE		// 1TB / Zone size 
+#define ZNS_LBA_START										0x8000000	// 0.5 TB / 4KB (NVMe Block Size)
+#define ZNS_LBA_END											(ZNS_LBA_START + (MAXIMUM_ZONE_COUNT * NVME_BLOCKS_PER_ZONE))
+
 /* Zone Group: # of Flash Block */
 #define TOTAL_GROUP_OF_LAYER								512			// 1TB / 2GB = 512
 #define BLOCK_LAYER_PER_GROUP								(USER_BLOCKS_PER_DIE / TOTAL_GROUP_OF_LAYER)
@@ -16,8 +22,7 @@
 #define ZONE_GROUP_START									256
 #define ZONE_GROUP_END										(ZONE_GROUP_START + MAXIMUM_ZONE_COUNT)
 
-#define ZNS_LBA_START										0x8000000	// 0.5 TB / 4KB (NVMe Block Size)
-#define ZNS_LBA_END											(ZNS_LBA_START + (MAXIMUM_ZONE_COUNT * ZONE_CAP))
+
 
 /*Opcodes for ZNS IO Commands */
 #define IO_ZNS_MANAGEMENT_SEND								0x79
@@ -61,6 +66,7 @@ typedef struct _ZONE_REG
     unsigned int Zone_ID;
     unsigned int OUTER_BLOCK_GROUP_ROW_ID;
     unsigned char Zone_State;
+	unsigned int SLBA;
     unsigned int Write_Pointer;
 } ZONE_REG, *P_ZONE_REG;
 

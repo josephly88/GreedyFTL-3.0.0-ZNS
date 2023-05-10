@@ -222,8 +222,8 @@ void handle_nvme_io_zns_mgmt_recv(unsigned int cmdSlotTag, NVME_IO_COMMAND *nvme
 
 		zone_report->zone_descriptor[zone_itr].ZT = 0x2;
 		zone_report->zone_descriptor[zone_itr].ZS = zoneMapPtr->zoneReg[i].Zone_State;
-		zone_report->zone_descriptor[zone_itr].ZCAP = ZONE_CAP;
-		zone_report->zone_descriptor[zone_itr].ZSLBA = i * ZONE_CAP;
+		zone_report->zone_descriptor[zone_itr].ZCAP = NVME_BLOCKS_PER_ZONE;
+		zone_report->zone_descriptor[zone_itr].ZSLBA = zoneMapPtr->zoneReg[i].SLBA;
 		zone_report->zone_descriptor[zone_itr].WP = zoneMapPtr->zoneReg[i].Write_Pointer;
 
 		zone_itr++;
