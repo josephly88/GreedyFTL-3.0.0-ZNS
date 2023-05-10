@@ -23,7 +23,6 @@
 #define ZONE_GROUP_END										(ZONE_GROUP_START + MAXIMUM_ZONE_COUNT)
 
 
-
 /*Opcodes for ZNS IO Commands */
 #define IO_ZNS_MANAGEMENT_SEND								0x79
 #define IO_ZNS_MANAGEMENT_RECEIVE							0x7A
@@ -68,7 +67,7 @@ typedef struct _ZONE_REG
     unsigned char Zone_State;
 	unsigned int SLBA;
     unsigned int Write_Pointer;
-} ZONE_REG, *P_ZONE_REG;
+} ZONE_REG;
 
 // Zone ID Extractor, similar to ZNS_ADDR
 typedef struct _ZONE_ID_EXTRACTOR_SLBA
