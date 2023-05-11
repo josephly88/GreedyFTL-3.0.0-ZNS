@@ -61,6 +61,16 @@ unsigned int findDataBufForWrite(unsigned int zoneID){
 	return AVAILABLE_DATA_BUFFER_ENTRY_COUNT + zoneID * DATA_BUFFER_ENTRY_COUNT_PER_ZONE + zoneMapPtr->zoneReg[zoneID].Buffer_Idx;
 }
 
+unsigned int findDataBufForRead(unsigned int reqSlotTag, unsigned int zoneID){
+	P_ZONE_MAP zoneMapPtr = (P_ZONE_MAP) ZONE_MAP_ADDR;
+
+	int level = 1 - (zoneMapPtr->zoneReg[zoneID].Buffer_Idx / SLICE_PER_STRIPE);
+
+	unsigned int dieNo = Vsa2VdieTranslation(reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr);
+
+	return AVAILABLE_DATA_BUFFER_ENTRY_COUNT + level * SLICE_PER_STRIPE + dieNo;
+}
+
 void ZNS_ReqTransSliceToLowLevel(unsigned int reqSlotTag){
 	P_ZONE_MAP zoneMapPtr = (P_ZONE_MAP) ZONE_MAP_ADDR;
     unsigned int zoneID, dataBufEntry;
@@ -84,12 +94,23 @@ void ZNS_ReqTransSliceToLowLevel(unsigned int reqSlotTag){
 
 		dataBufMapPtr->dataBuf[dataBufEntry].dirty = DATA_BUF_DIRTY;
 		reqPoolPtr->reqPool[reqSlotTag].reqCode = REQ_CODE_RxDMA;
-		reqPoolPtr->reqPool[reqSlotTag].reqType = REQ_TYPE_NVME_DMA;
-		reqPoolPtr->reqPool[reqSlotTag].reqOpt.dataBufFormat = REQ_OPT_DATA_BUF_ENTRY;
-
-		UpdateDataBufEntryInfoBlockingReq(dataBufEntry, reqSlotTag);
-		SelectLowLevelReqQ(reqSlotTag);
 	}
+	else{
+
+		dataBufEntry = findDataBufForRead(reqSlotTag, zoneID);
+
+		if(dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr != reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr){
+			ZNS_DataReadFromNand(reqSlotTag);
+		}
+
+		reqPoolPtr->reqPool[reqSlotTag].reqCode = REQ_CODE_TxDMA;
+	}
+
+	reqPoolPtr->reqPool[reqSlotTag].reqType = REQ_TYPE_NVME_DMA;
+	reqPoolPtr->reqPool[reqSlotTag].reqOpt.dataBufFormat = REQ_OPT_DATA_BUF_ENTRY;
+
+	UpdateDataBufEntryInfoBlockingReq(dataBufEntry, reqSlotTag);
+	SelectLowLevelReqQ(reqSlotTag);
 }
 
 void ZNS_EvictDataBufStripe(unsigned int zoneID, unsigned int originReqSlotTag){
