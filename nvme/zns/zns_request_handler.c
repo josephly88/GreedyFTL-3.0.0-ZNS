@@ -61,6 +61,12 @@ unsigned int findDataBufForWrite(unsigned int zoneID){
 	return AVAILABLE_DATA_BUFFER_ENTRY_COUNT + zoneID * DATA_BUFFER_ENTRY_COUNT_PER_ZONE + zoneMapPtr->zoneReg[zoneID].Buffer_Idx;
 }
 
+void incrementDataBufPointer(unsigned int zoneID){
+	P_ZONE_MAP zoneMapPtr = (P_ZONE_MAP) ZONE_MAP_ADDR;
+
+	zoneMapPtr->zoneReg[zoneID].Buffer_Idx = (zoneMapPtr->zoneReg[zoneID].Buffer_Idx + 1) % DATA_BUFFER_ENTRY_COUNT_PER_ZONE;
+}
+
 unsigned int findDataBufForRead(unsigned int reqSlotTag, unsigned int zoneID){
 	P_ZONE_MAP zoneMapPtr = (P_ZONE_MAP) ZONE_MAP_ADDR;
 
@@ -72,38 +78,41 @@ unsigned int findDataBufForRead(unsigned int reqSlotTag, unsigned int zoneID){
 }
 
 void ZNS_ReqTransSliceToLowLevel(unsigned int reqSlotTag){
-	P_ZONE_MAP zoneMapPtr = (P_ZONE_MAP) ZONE_MAP_ADDR;
+	//P_ZONE_MAP zoneMapPtr = (P_ZONE_MAP) ZONE_MAP_ADDR;
     unsigned int zoneID, dataBufEntry;
 
-	xil_printf("Catch a ZNS Request LogicalSliceAddr : 0x%x\r\n", reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr);
-
 	zoneID = Lsa2ZoneId(reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr);
+
+	xil_printf("Catch a ZNS Request LogicalSliceAddr : 0x%x, zone ID : %d \r\n", reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr, zoneID);
 	
 	if(reqPoolPtr->reqPool[reqSlotTag].reqCode == REQ_CODE_WRITE){
-			
-		dataBufEntry = findDataBufForWrite(zoneID);
 		
-		zoneMapPtr->zoneReg[zoneID].Buffer_Idx = (zoneMapPtr->zoneReg[zoneID].Buffer_Idx + 1) % DATA_BUFFER_ENTRY_COUNT_PER_ZONE;
+		dataBufEntry = findDataBufForWrite(zoneID);
+		reqPoolPtr->reqPool[reqSlotTag].dataBufInfo.entry = dataBufEntry;
+		
+		incrementDataBufPointer(zoneID);
 
-		ZNS_EvictDataBufStripe(zoneID, reqSlotTag);
-
+		//ZNS_EvictDataBufEntry(zoneID, reqSlotTag);
 		dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr = reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr;
 
+		/*
 		if(reqPoolPtr->reqPool[reqSlotTag].nvmeDmaInfo.numOfNvmeBlock != NVME_BLOCKS_PER_SLICE) //for read modify write
 			ZNS_DataReadFromNand(reqSlotTag);
+		*/
 
 		dataBufMapPtr->dataBuf[dataBufEntry].dirty = DATA_BUF_DIRTY;
 		reqPoolPtr->reqPool[reqSlotTag].reqCode = REQ_CODE_RxDMA;
 	}
 	else{
-
+		
 		dataBufEntry = findDataBufForRead(reqSlotTag, zoneID);
-
+		/*
 		if(dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr != reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr){
 			ZNS_DataReadFromNand(reqSlotTag);
 		}
 
 		reqPoolPtr->reqPool[reqSlotTag].reqCode = REQ_CODE_TxDMA;
+		*/
 	}
 
 	reqPoolPtr->reqPool[reqSlotTag].reqType = REQ_TYPE_NVME_DMA;
@@ -113,43 +122,35 @@ void ZNS_ReqTransSliceToLowLevel(unsigned int reqSlotTag){
 	SelectLowLevelReqQ(reqSlotTag);
 }
 
-void ZNS_EvictDataBufStripe(unsigned int zoneID, unsigned int originReqSlotTag){
+void ZNS_EvictDataBufEntry(unsigned int zoneID, unsigned int originReqSlotTag){
 	P_ZONE_MAP zoneMapPtr = (P_ZONE_MAP) ZONE_MAP_ADDR;
 	unsigned int reqSlotTag, virtualSliceAddr, dataBufEntry;
 
-	if(zoneMapPtr->zoneReg[zoneID].Buffer_Idx % SLICE_PER_STRIPE == 0){
-		int level = 1 - (zoneMapPtr->zoneReg[zoneID].Buffer_Idx / SLICE_PER_STRIPE);		
+	// Circular Buffer
+	dataBufEntry = AVAILABLE_DATA_BUFFER_ENTRY_COUNT + (zoneID * DATA_BUFFER_ENTRY_COUNT_PER_ZONE) + ((zoneMapPtr->zoneReg[zoneID].Buffer_Idx + SLICE_PER_STRIPE) % (2*SLICE_PER_STRIPE));
+	if(dataBufMapPtr->dataBuf[dataBufEntry].dirty == DATA_BUF_DIRTY)
+	{
+		reqSlotTag = GetFromFreeReqQ();
+		virtualSliceAddr =  dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr;
 
-		xil_printf("Evict buffer ID from : %d \r\n", AVAILABLE_DATA_BUFFER_ENTRY_COUNT + level * SLICE_PER_STRIPE);
+		reqPoolPtr->reqPool[reqSlotTag].reqType = REQ_TYPE_NAND;
+		reqPoolPtr->reqPool[reqSlotTag].reqCode = REQ_CODE_WRITE;
+		reqPoolPtr->reqPool[reqSlotTag].nvmeCmdSlotTag = reqPoolPtr->reqPool[originReqSlotTag].nvmeCmdSlotTag;
+		reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr = dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr;
+		reqPoolPtr->reqPool[reqSlotTag].reqOpt.dataBufFormat = REQ_OPT_DATA_BUF_ENTRY;
+		reqPoolPtr->reqPool[reqSlotTag].reqOpt.nandAddr = REQ_OPT_NAND_ADDR_VSA;
 
-		int i;
-		for(i = 0; i < SLICE_PER_STRIPE; i++){
+		reqPoolPtr->reqPool[reqSlotTag].reqOpt.nandEcc = REQ_OPT_NAND_ECC_ON;
+		reqPoolPtr->reqPool[reqSlotTag].reqOpt.nandEccWarning = REQ_OPT_NAND_ECC_WARNING_ON;
+		reqPoolPtr->reqPool[reqSlotTag].reqOpt.rowAddrDependencyCheck = REQ_OPT_ROW_ADDR_DEPENDENCY_CHECK;
+		reqPoolPtr->reqPool[reqSlotTag].reqOpt.blockSpace = REQ_OPT_BLOCK_SPACE_MAIN;
+		reqPoolPtr->reqPool[reqSlotTag].dataBufInfo.entry = dataBufEntry;
+		UpdateDataBufEntryInfoBlockingReq(dataBufEntry, reqSlotTag);
+		reqPoolPtr->reqPool[reqSlotTag].nandInfo.virtualSliceAddr = virtualSliceAddr;
 
-			dataBufEntry = AVAILABLE_DATA_BUFFER_ENTRY_COUNT + level * SLICE_PER_STRIPE + i;
+		SelectLowLevelReqQ(reqSlotTag);
 
-			if(dataBufMapPtr->dataBuf[dataBufEntry].dirty == DATA_BUF_DIRTY){
-				reqSlotTag = GetFromFreeReqQ();
-				virtualSliceAddr = Lsa2Lva(dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr);
-
-				reqPoolPtr->reqPool[reqSlotTag].reqType = REQ_TYPE_NAND;
-				reqPoolPtr->reqPool[reqSlotTag].reqCode = REQ_CODE_WRITE;
-				reqPoolPtr->reqPool[reqSlotTag].nvmeCmdSlotTag = reqPoolPtr->reqPool[originReqSlotTag].nvmeCmdSlotTag;
-				reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr = dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr;
-				reqPoolPtr->reqPool[reqSlotTag].reqOpt.dataBufFormat = REQ_OPT_DATA_BUF_ENTRY;
-				reqPoolPtr->reqPool[reqSlotTag].reqOpt.nandAddr = REQ_OPT_NAND_ADDR_VSA;
-				reqPoolPtr->reqPool[reqSlotTag].reqOpt.nandEcc = REQ_OPT_NAND_ECC_ON;
-				reqPoolPtr->reqPool[reqSlotTag].reqOpt.nandEccWarning = REQ_OPT_NAND_ECC_WARNING_ON;
-				reqPoolPtr->reqPool[reqSlotTag].reqOpt.rowAddrDependencyCheck = REQ_OPT_ROW_ADDR_DEPENDENCY_CHECK;
-				reqPoolPtr->reqPool[reqSlotTag].reqOpt.blockSpace = REQ_OPT_BLOCK_SPACE_MAIN;
-				reqPoolPtr->reqPool[reqSlotTag].dataBufInfo.entry = dataBufEntry;
-				UpdateDataBufEntryInfoBlockingReq(dataBufEntry, reqSlotTag);
-				reqPoolPtr->reqPool[reqSlotTag].nandInfo.virtualSliceAddr = virtualSliceAddr;
-
-				SelectLowLevelReqQ(reqSlotTag);
-
-				dataBufMapPtr->dataBuf[dataBufEntry].dirty = DATA_BUF_CLEAN;
-			}
-		}
+		dataBufMapPtr->dataBuf[dataBufEntry].dirty = DATA_BUF_CLEAN;
 	}
 }
 
