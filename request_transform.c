@@ -95,10 +95,18 @@ void ReqTransNvmeToSlice(unsigned int cmdSlotTag, unsigned int startLba, unsigne
 	else
 		assert(!"[WARNING] Not supported command code [WARNING]");
 
-	if(ZNS_IO_COMMAND_SET && cmdCode == IO_NVM_WRITE){
-		if(startLba >= ZNS_LBA_START && startLba < ZNS_LBA_END){
-			if(ZoneWriteCheck(startLba, nlb + 1) == 0)
-				return;
+	if(ZNS_IO_COMMAND_SET){
+		if(cmdCode == IO_NVM_WRITE){
+			if(startLba >= ZNS_LBA_START && startLba < ZNS_LBA_END){
+				if(ZoneWriteCheck(startLba, nlb + 1) == 0)
+					return;
+			}
+		}
+		if(cmdCode == IO_NVM_READ){
+			if(startLba >= ZNS_LBA_START && startLba < ZNS_LBA_END){
+				if(ZoneReadCheck(startLba, nlb + 1) == 0)
+					return;
+			}
 		}
 	}
 

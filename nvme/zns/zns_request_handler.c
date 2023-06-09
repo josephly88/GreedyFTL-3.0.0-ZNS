@@ -10,8 +10,31 @@
 
 #include "../../data_buffer.h"
 
+P_ZONE_MAP zoneMapPtr;
+
+void InitZNS()
+{
+    zoneMapPtr = (P_ZONE_MAP) ZONE_MAP_ADDR;
+
+    zoneMapPtr->Num_Open_Zone = 0;
+    zoneMapPtr->Num_Close_Zone = 0;
+    zoneMapPtr->Num_Full_Zone = 0;
+    zoneMapPtr->Num_Empty_Zone = MAXIMUM_ZONE_COUNT;
+    zoneMapPtr->Num_Read_Zone = 0;
+    zoneMapPtr->Num_Off_Zone = 0;
+
+    int i;
+    for (i = 0; i < MAXIMUM_ZONE_COUNT; i++){
+        zoneMapPtr->zoneReg[i].Zone_ID = i;
+        zoneMapPtr->zoneReg[i].OUTER_BLOCK_GROUP_ROW_ID = 0;
+        zoneMapPtr->zoneReg[i].Zone_State = EMPTY;
+        zoneMapPtr->zoneReg[i].SLBA = ZNS_LBA_START + i * NVME_BLOCKS_PER_ZONE;
+        zoneMapPtr->zoneReg[i].Write_Pointer = zoneMapPtr->zoneReg[i].SLBA;
+        zoneMapPtr->zoneReg[i].Buffer_Idx = 0;
+    }
+}
+
 int ZoneWriteCheck(unsigned int slba, unsigned int nlb){
-    P_ZONE_MAP zoneMapPtr = (P_ZONE_MAP) ZONE_MAP_ADDR;
 	ZONE_REG zoneReg;
 
 	unsigned int zoneID = Lba2ZoneId(slba);
@@ -55,30 +78,63 @@ int ZoneWriteCheck(unsigned int slba, unsigned int nlb){
     return 1;
 }
 
-unsigned int findDataBufForWrite(unsigned int zoneID){
-	P_ZONE_MAP zoneMapPtr = (P_ZONE_MAP) ZONE_MAP_ADDR;
+int ZoneReadCheck(unsigned int slba, unsigned int nlb){
+	ZONE_REG zoneReg;
 
-	return AVAILABLE_DATA_BUFFER_ENTRY_COUNT + zoneID * DATA_BUFFER_ENTRY_COUNT_PER_ZONE + zoneMapPtr->zoneReg[zoneID].Buffer_Idx;
+	unsigned int zoneID = Lba2ZoneId(slba);
+	
+	// Zone ID Check
+	if(zoneID < 0 || zoneID >= MAXIMUM_ZONE_COUNT){
+		xil_printf("Zone ID Error: %d\r\n", zoneID);
+		return 0;
+	}
+
+	zoneReg = zoneMapPtr->zoneReg[zoneID];
+
+	// Zone State Check
+	if(zoneReg.Zone_State == EMPTY || zoneReg.Zone_State == OFFLINE){
+		xil_printf("Zone State Error: %d\r\n", zoneReg.Zone_State);
+		return 0;
+	}
+
+	// Out-of-Bound Check
+	if(slba + nlb > zoneReg.Write_Pointer){
+		xil_printf("Out-of-Bound Error: WP: %x SLBA: %x nlb+1 : %d\r\n", zoneReg.Write_Pointer, slba, nlb);
+		return 0;
+	}
+
+	return 1;
+}
+
+unsigned int GetZoneDataBuf(unsigned int zoneID, int offset){
+	unsigned int off_idx = (zoneMapPtr->zoneReg[zoneID].Buffer_Idx + DATA_BUFFER_ENTRY_COUNT_PER_ZONE + offset) % DATA_BUFFER_ENTRY_COUNT_PER_ZONE;
+	return AVAILABLE_DATA_BUFFER_ENTRY_COUNT + zoneID * DATA_BUFFER_ENTRY_COUNT_PER_ZONE + off_idx;
 }
 
 void incrementDataBufPointer(unsigned int zoneID){
-	P_ZONE_MAP zoneMapPtr = (P_ZONE_MAP) ZONE_MAP_ADDR;
-
 	zoneMapPtr->zoneReg[zoneID].Buffer_Idx = (zoneMapPtr->zoneReg[zoneID].Buffer_Idx + 1) % DATA_BUFFER_ENTRY_COUNT_PER_ZONE;
 }
 
-unsigned int findDataBufForRead(unsigned int reqSlotTag, unsigned int zoneID){
-	P_ZONE_MAP zoneMapPtr = (P_ZONE_MAP) ZONE_MAP_ADDR;
+unsigned int checkZoneDataBufStripe(unsigned int reqSlotTag, unsigned int zoneID){
+	unsigned int LatestdataBufEntry = GetZoneDataBuf(zoneID, -1);
+	unsigned int slice_diff = dataBufMapPtr->dataBuf[LatestdataBufEntry].logicalSliceAddr - reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr;
 
-	int level = 1 - (zoneMapPtr->zoneReg[zoneID].Buffer_Idx / SLICE_PER_STRIPE);
-
-	unsigned int dieNo = Vsa2VdieTranslation(reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr);
-
-	return AVAILABLE_DATA_BUFFER_ENTRY_COUNT + level * SLICE_PER_STRIPE + dieNo;
+	if(slice_diff < SLICE_PER_STRIPE){
+		unsigned int dataBufEntry = GetZoneDataBuf(zoneID, -(slice_diff+1));
+		if(dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr == reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr){
+			xil_printf("Slice_diff : %d\r\n", slice_diff);
+			return dataBufEntry;
+		}
+		else{
+			return DATA_BUF_FAIL;
+		}
+	}
+	else{
+		return DATA_BUF_FAIL;
+	}
 }
 
 void ZNS_ReqTransSliceToLowLevel(unsigned int reqSlotTag){
-	//P_ZONE_MAP zoneMapPtr = (P_ZONE_MAP) ZONE_MAP_ADDR;
     unsigned int zoneID, dataBufEntry;
 
 	zoneID = Lsa2ZoneId(reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr);
@@ -86,14 +142,19 @@ void ZNS_ReqTransSliceToLowLevel(unsigned int reqSlotTag){
 	xil_printf("Catch a ZNS Request LogicalSliceAddr : 0x%x, zone ID : %d \r\n", reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr, zoneID);
 	
 	if(reqPoolPtr->reqPool[reqSlotTag].reqCode == REQ_CODE_WRITE){
-		
-		dataBufEntry = findDataBufForWrite(zoneID);
+
+		dataBufEntry = AVAILABLE_DATA_BUFFER_ENTRY_COUNT;
+		reqPoolPtr->reqPool[reqSlotTag].dataBufInfo.entry = dataBufEntry;
+
+		/*
+		dataBufEntry = GetZoneDataBuf(zoneID, 0);
 		reqPoolPtr->reqPool[reqSlotTag].dataBufInfo.entry = dataBufEntry;
 		
 		incrementDataBufPointer(zoneID);
 
-		//ZNS_EvictDataBufEntry(zoneID, reqSlotTag);
+		ZNS_EvictDataBufEntry(zoneID, reqSlotTag);
 		dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr = reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr;
+		*/
 
 		/*
 		if(reqPoolPtr->reqPool[reqSlotTag].nvmeDmaInfo.numOfNvmeBlock != NVME_BLOCKS_PER_SLICE) //for read modify write
@@ -103,16 +164,25 @@ void ZNS_ReqTransSliceToLowLevel(unsigned int reqSlotTag){
 		dataBufMapPtr->dataBuf[dataBufEntry].dirty = DATA_BUF_DIRTY;
 		reqPoolPtr->reqPool[reqSlotTag].reqCode = REQ_CODE_RxDMA;
 	}
-	else{
-		
-		dataBufEntry = findDataBufForRead(reqSlotTag, zoneID);
+	else if (reqPoolPtr->reqPool[reqSlotTag].reqCode == REQ_CODE_READ){
+
+		dataBufEntry = AVAILABLE_DATA_BUFFER_ENTRY_COUNT;
+		reqPoolPtr->reqPool[reqSlotTag].dataBufInfo.entry = dataBufEntry;
+
+		reqPoolPtr->reqPool[reqSlotTag].reqCode = REQ_CODE_TxDMA;
+
 		/*
-		if(dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr != reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr){
-			ZNS_DataReadFromNand(reqSlotTag);
+		dataBufEntry = checkZoneDataBufStripe(reqSlotTag, zoneID);
+		if(dataBufEntry == DATA_BUF_FAIL){
+			xil_printf("Data Buffer Entry Fail\r\n");
+			return;
 		}
 
 		reqPoolPtr->reqPool[reqSlotTag].reqCode = REQ_CODE_TxDMA;
 		*/
+	}
+	else{
+		assert(!"[WARNING] Not supported reqCode. [WARNING]");
 	}
 
 	reqPoolPtr->reqPool[reqSlotTag].reqType = REQ_TYPE_NVME_DMA;
@@ -123,7 +193,6 @@ void ZNS_ReqTransSliceToLowLevel(unsigned int reqSlotTag){
 }
 
 void ZNS_EvictDataBufEntry(unsigned int zoneID, unsigned int originReqSlotTag){
-	P_ZONE_MAP zoneMapPtr = (P_ZONE_MAP) ZONE_MAP_ADDR;
 	unsigned int reqSlotTag, virtualSliceAddr, dataBufEntry;
 
 	// Circular Buffer

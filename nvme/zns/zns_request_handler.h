@@ -3,13 +3,21 @@
 
 #include "zns.h"
 
+void InitZNS();
+
 int ZoneWriteCheck(unsigned int slba, unsigned int numOfSlice);
 
-unsigned int findDataBufForWrite(unsigned int zoneID);
+int ZoneReadCheck(unsigned int slba, unsigned int nlb);
+
+unsigned int GetZoneDataBuf(unsigned int zoneID, int offset);
+
+void incrementDataBufPointer(unsigned int zoneID);
+
+unsigned int checkZoneDataBufStripe(unsigned int reqSlotTag, unsigned int zoneID);
 
 void ZNS_ReqTransSliceToLowLevel(unsigned int reqSlotTag);
 
-void ZNS_EvictDataBufStripe(unsigned int zoneID, unsigned int originReqSlotTag);
+void ZNS_EvictDataBufEntry(unsigned int zoneID, unsigned int originReqSlotTag);
 
 void ZNS_DataReadFromNand(unsigned int originReqSlotTag);
 
