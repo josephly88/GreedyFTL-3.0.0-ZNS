@@ -120,9 +120,9 @@ unsigned int checkZoneDataBufStripe(unsigned int reqSlotTag, unsigned int zoneID
 	unsigned int slice_diff = dataBufMapPtr->dataBuf[LatestdataBufEntry].logicalSliceAddr - reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr;
 
 	if(slice_diff < SLICE_PER_STRIPE){
-		unsigned int dataBufEntry = GetZoneDataBuf(zoneID, -(slice_diff+1));
+		unsigned int dataBufEntry = GetZoneDataBuf(zoneID, -(1+slice_diff));
 		if(dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr == reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr){
-			xil_printf("Slice_diff : %d\r\n", slice_diff);
+			xil_printf("Hit: Slice_diff : %d\r\n", slice_diff);
 			return dataBufEntry;
 		}
 		else{
@@ -142,11 +142,6 @@ void ZNS_ReqTransSliceToLowLevel(unsigned int reqSlotTag){
 	xil_printf("Catch a ZNS Request LogicalSliceAddr : 0x%x, zone ID : %d \r\n", reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr, zoneID);
 	
 	if(reqPoolPtr->reqPool[reqSlotTag].reqCode == REQ_CODE_WRITE){
-
-		dataBufEntry = AVAILABLE_DATA_BUFFER_ENTRY_COUNT;
-		reqPoolPtr->reqPool[reqSlotTag].dataBufInfo.entry = dataBufEntry;
-
-		/*
 		dataBufEntry = GetZoneDataBuf(zoneID, 0);
 		reqPoolPtr->reqPool[reqSlotTag].dataBufInfo.entry = dataBufEntry;
 		
@@ -154,7 +149,6 @@ void ZNS_ReqTransSliceToLowLevel(unsigned int reqSlotTag){
 
 		ZNS_EvictDataBufEntry(zoneID, reqSlotTag);
 		dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr = reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr;
-		*/
 
 		/*
 		if(reqPoolPtr->reqPool[reqSlotTag].nvmeDmaInfo.numOfNvmeBlock != NVME_BLOCKS_PER_SLICE) //for read modify write
@@ -163,23 +157,21 @@ void ZNS_ReqTransSliceToLowLevel(unsigned int reqSlotTag){
 
 		dataBufMapPtr->dataBuf[dataBufEntry].dirty = DATA_BUF_DIRTY;
 		reqPoolPtr->reqPool[reqSlotTag].reqCode = REQ_CODE_RxDMA;
+
+		xil_printf("Write Req. DataBufEntry : %d, SliceAddr : 0x%x\r\n", dataBufEntry, dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr);
 	}
 	else if (reqPoolPtr->reqPool[reqSlotTag].reqCode == REQ_CODE_READ){
-
-		dataBufEntry = AVAILABLE_DATA_BUFFER_ENTRY_COUNT;
-		reqPoolPtr->reqPool[reqSlotTag].dataBufInfo.entry = dataBufEntry;
-
-		reqPoolPtr->reqPool[reqSlotTag].reqCode = REQ_CODE_TxDMA;
-
-		/*
+		
 		dataBufEntry = checkZoneDataBufStripe(reqSlotTag, zoneID);
 		if(dataBufEntry == DATA_BUF_FAIL){
 			xil_printf("Data Buffer Entry Fail\r\n");
 			return;
 		}
+		reqPoolPtr->reqPool[reqSlotTag].dataBufInfo.entry = dataBufEntry;
 
 		reqPoolPtr->reqPool[reqSlotTag].reqCode = REQ_CODE_TxDMA;
-		*/
+
+		xil_printf("Read Req. DataBufEntry : %d, SliceAddr : 0x%x\r\n", dataBufEntry, dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr);
 	}
 	else{
 		assert(!"[WARNING] Not supported reqCode. [WARNING]");
