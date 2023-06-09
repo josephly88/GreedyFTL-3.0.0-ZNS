@@ -144,10 +144,10 @@ void ZNS_ReqTransSliceToLowLevel(unsigned int reqSlotTag){
 	if(reqPoolPtr->reqPool[reqSlotTag].reqCode == REQ_CODE_WRITE){
 		dataBufEntry = GetZoneDataBuf(zoneID, 0);
 		reqPoolPtr->reqPool[reqSlotTag].dataBufInfo.entry = dataBufEntry;
-		
-		incrementDataBufPointer(zoneID);
 
 		ZNS_EvictDataBufEntry(zoneID, reqSlotTag);
+		incrementDataBufPointer(zoneID);
+		
 		dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr = reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr;
 
 		/*
@@ -191,6 +191,7 @@ void ZNS_EvictDataBufEntry(unsigned int zoneID, unsigned int originReqSlotTag){
 	dataBufEntry = AVAILABLE_DATA_BUFFER_ENTRY_COUNT + (zoneID * DATA_BUFFER_ENTRY_COUNT_PER_ZONE) + ((zoneMapPtr->zoneReg[zoneID].Buffer_Idx + SLICE_PER_STRIPE) % (2*SLICE_PER_STRIPE));
 	if(dataBufMapPtr->dataBuf[dataBufEntry].dirty == DATA_BUF_DIRTY)
 	{
+		xil_printf("Evict DataBufEntry : %d, SliceAddr : 0x%x\r\n", dataBufEntry, dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr);
 		reqSlotTag = GetFromFreeReqQ();
 		virtualSliceAddr =  dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr;
 
