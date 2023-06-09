@@ -8,7 +8,7 @@ void handle_zns_close_zone(IO_ZNS_ZONE_MANGAEMENT_SEND_DW13 mgmtSendInfo, unsign
 
     if(mgmtSendInfo.SELECT_ALL == 1){
         int i;
-        for(i = 0; i < MAXIMUM_ZONE_COUNT; i++){
+        for(i = 0; i < MAXIMUM_OPEN_ZONE_COUNT; i++){
             if(zoneMapPtr->zoneReg[i].Zone_State == EXPLICITLY_OPENED || zoneMapPtr->zoneReg[i].Zone_State == IMPLICITLY_OPENED){
                 zoneMapPtr->zoneReg[i].Zone_State = CLOSED;
                 // UNMAP A FBG
@@ -18,7 +18,7 @@ void handle_zns_close_zone(IO_ZNS_ZONE_MANGAEMENT_SEND_DW13 mgmtSendInfo, unsign
     else{
         unsigned int zone_id = (SLBA - ZNS_LBA_START) / NVME_BLOCKS_PER_ZONE;
 
-        if(zone_id >= MAXIMUM_ZONE_COUNT){
+        if(zone_id >= MAXIMUM_OPEN_ZONE_COUNT){
             xil_printf("SLBA out of range: 0x%X\r\n", SLBA);
             return;
         }
@@ -39,7 +39,7 @@ void handle_zns_finish_zone(IO_ZNS_ZONE_MANGAEMENT_SEND_DW13 mgmtSendInfo, unsig
 
     if(mgmtSendInfo.SELECT_ALL == 1){
         int i;
-        for(i = 0; i < MAXIMUM_ZONE_COUNT; i++){
+        for(i = 0; i < MAXIMUM_OPEN_ZONE_COUNT; i++){
             if(zoneMapPtr->zoneReg[i].Zone_State == IMPLICITLY_OPENED || zoneMapPtr->zoneReg[i].Zone_State == EXPLICITLY_OPENED
                     || zoneMapPtr->zoneReg[i].Zone_State == CLOSED){
                 zoneMapPtr->zoneReg[i].Zone_State = FULL;
@@ -50,7 +50,7 @@ void handle_zns_finish_zone(IO_ZNS_ZONE_MANGAEMENT_SEND_DW13 mgmtSendInfo, unsig
     else{
         unsigned int zone_id = (SLBA - ZNS_LBA_START) / NVME_BLOCKS_PER_ZONE;
 
-        if(zone_id >= MAXIMUM_ZONE_COUNT){
+        if(zone_id >= MAXIMUM_OPEN_ZONE_COUNT){
             xil_printf("SLBA out of range: 0x%X\r\n", SLBA);
             return;
         }
@@ -71,7 +71,7 @@ void handle_zns_open_zone(IO_ZNS_ZONE_MANGAEMENT_SEND_DW13 mgmtSendInfo, unsigne
 
     if(mgmtSendInfo.SELECT_ALL == 1){
         int i;
-        for(i = 0; i < MAXIMUM_ZONE_COUNT; i++){
+        for(i = 0; i < MAXIMUM_OPEN_ZONE_COUNT; i++){
             if(zoneMapPtr->zoneReg[i].Zone_State == CLOSED){
                 zoneMapPtr->zoneReg[i].Zone_State = EXPLICITLY_OPENED;
                 // MAP A FBG
@@ -81,7 +81,7 @@ void handle_zns_open_zone(IO_ZNS_ZONE_MANGAEMENT_SEND_DW13 mgmtSendInfo, unsigne
     else{
         unsigned int zone_id = (SLBA - ZNS_LBA_START) / NVME_BLOCKS_PER_ZONE;
 
-        if(zone_id >= MAXIMUM_ZONE_COUNT){
+        if(zone_id >= MAXIMUM_OPEN_ZONE_COUNT){
             xil_printf("SLBA out of range: 0x%X\r\n", SLBA);
             return;
         }
@@ -102,7 +102,7 @@ void handle_zns_reset_zone(IO_ZNS_ZONE_MANGAEMENT_SEND_DW13 mgmtSendInfo, unsign
 
     if(mgmtSendInfo.SELECT_ALL == 1){
         int i;
-        for(i = 0; i < MAXIMUM_ZONE_COUNT; i++){
+        for(i = 0; i < MAXIMUM_OPEN_ZONE_COUNT; i++){
             if(zoneMapPtr->zoneReg[i].Zone_State == IMPLICITLY_OPENED || zoneMapPtr->zoneReg[i].Zone_State == EXPLICITLY_OPENED
                     || zoneMapPtr->zoneReg[i].Zone_State == CLOSED || zoneMapPtr->zoneReg[i].Zone_State == FULL){
                 zoneMapPtr->zoneReg[i].Zone_State = EMPTY;
@@ -113,7 +113,7 @@ void handle_zns_reset_zone(IO_ZNS_ZONE_MANGAEMENT_SEND_DW13 mgmtSendInfo, unsign
     else{
         unsigned int zone_id = (SLBA - ZNS_LBA_START) / NVME_BLOCKS_PER_ZONE;
 
-        if(zone_id >= MAXIMUM_ZONE_COUNT){
+        if(zone_id >= MAXIMUM_OPEN_ZONE_COUNT){
             xil_printf("SLBA out of range: 0x%X\r\n", SLBA);
             return;
         }
@@ -135,7 +135,7 @@ void handle_zns_offline_zone(IO_ZNS_ZONE_MANGAEMENT_SEND_DW13 mgmtSendInfo, unsi
 
     if(mgmtSendInfo.SELECT_ALL == 1){
         int i;
-        for(i = 0; i < MAXIMUM_ZONE_COUNT; i++){
+        for(i = 0; i < MAXIMUM_OPEN_ZONE_COUNT; i++){
             if(zoneMapPtr->zoneReg[i].Zone_State == READ_ONLY){
                 zoneMapPtr->zoneReg[i].Zone_State = OFFLINE;
                 // UNMAP A FBG
@@ -145,7 +145,7 @@ void handle_zns_offline_zone(IO_ZNS_ZONE_MANGAEMENT_SEND_DW13 mgmtSendInfo, unsi
     else{
         unsigned int zone_id = (SLBA - ZNS_LBA_START) / NVME_BLOCKS_PER_ZONE;
 
-        if(zone_id >= MAXIMUM_ZONE_COUNT){
+        if(zone_id >= MAXIMUM_OPEN_ZONE_COUNT){
             xil_printf("SLBA out of range: 0x%X\r\n", SLBA);
             return;
         }

@@ -11,9 +11,9 @@
 #define SLICE_PER_ZONE										(NVME_BLOCKS_PER_ZONE / NVME_BLOCKS_PER_SLICE)
 
 /* Zone NVMe LBA Range */
-#define MAXIMUM_ZONE_COUNT                  				1 				// 1073741824 / ZONE_SIZE		// 1TB / Zone size 
+#define MAXIMUM_OPEN_ZONE_COUNT                  			1 				// 1073741824 / ZONE_SIZE		// 1TB / Zone size 
 #define ZNS_LBA_START										0x8000000	// 0.5 TB / 4KB (NVMe Block Size)
-#define ZNS_LBA_END											(ZNS_LBA_START + (MAXIMUM_ZONE_COUNT * NVME_BLOCKS_PER_ZONE))
+#define ZNS_LBA_END											(ZNS_LBA_START + (MAXIMUM_OPEN_ZONE_COUNT * NVME_BLOCKS_PER_ZONE))
 #define ZNS_LSA_START										(ZNS_LBA_START / NVME_BLOCKS_PER_SLICE)
 #define ZNS_LSA_END											(ZNS_LBA_END / NVME_BLOCKS_PER_SLICE)
 
@@ -26,12 +26,13 @@
 #define SLICE_PER_BLOCK_GROUP								(BLOCK_LAYER_PER_BLOCK_GROUP * SLICE_PER_BLOCK_LAYER)
 
 #define ZONE_BLOCK_GROUP_START								256
-#define ZONE_BLOCK_GROUP_END								(ZONE_BLOCK_GROUP_START + MAXIMUM_ZONE_COUNT)
+#define ZONE_BLOCK_GROUP_END								(ZONE_BLOCK_GROUP_START + MAXIMUM_OPEN_ZONE_COUNT)
 
 /* Zone Data Buffer Range */
 #define DATA_BUFFER_STRIPE_PER_ZONE							2
 #define DATA_BUFFER_ENTRY_COUNT_PER_ZONE					(SLICE_PER_STRIPE * DATA_BUFFER_STRIPE_PER_ZONE)
-#define AVAILABLE_ZNS_DATA_BUFFER_ENTRY_COUNT				(MAXIMUM_ZONE_COUNT * DATA_BUFFER_ENTRY_COUNT_PER_ZONE)
+#define OPEN_ZONE_DATA_BUFFER_ENTRY_COUNT					(MAXIMUM_OPEN_ZONE_COUNT * DATA_BUFFER_ENTRY_COUNT_PER_ZONE)
+#define ACTIVE_ZONE_READ_BUFFER_ENTRY_COUNT					(MAXIMUM_OPEN_ZONE_COUNT * SLICE_PER_STRIPE)
 
 /*Opcodes for ZNS IO Commands */
 #define IO_ZNS_MANAGEMENT_SEND								0x79
@@ -93,7 +94,8 @@ typedef struct _ZONE_MAP
     unsigned int Num_Empty_Zone;
     unsigned int Num_Read_Zone;
     unsigned int Num_Off_Zone;
-    ZONE_REG zoneReg[MAXIMUM_ZONE_COUNT];
+    ZONE_REG zoneReg[MAXIMUM_OPEN_ZONE_COUNT];
+	unsigned int readBufPtr[64];
 } ZONE_MAP, *P_ZONE_MAP;
 
 /* ZNS Identify Namespace Data Structure */
@@ -195,7 +197,7 @@ typedef struct _IO_ZNS_MANAGEMENT_RECEIVE_ZONE_REPORT
 {
 	unsigned long long num_zone;
 	unsigned long long reserved0[7];
-	ZONE_DESCRIPTOR zone_descriptor[MAXIMUM_ZONE_COUNT];
+	ZONE_DESCRIPTOR zone_descriptor[MAXIMUM_OPEN_ZONE_COUNT];
 } IO_ZNS_MANAGEMENT_RECEIVE_ZONE_REPORT;
 
 #endif

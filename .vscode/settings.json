@@ -1,5 +1,6 @@
 {
     "files.associations": {
-        "zns_request_handler.h": "c"
+        "zns_request_handler.h": "c",
+        "ftl_config.h": "c"
     }
 }

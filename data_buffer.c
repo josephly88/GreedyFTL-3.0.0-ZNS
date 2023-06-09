@@ -62,7 +62,7 @@ void InitDataBuf()
 	dataBufHashTablePtr = (P_DATA_BUF_HASH_TABLE)DATA_BUFFFER_HASH_TABLE_ADDR;
 	tempDataBufMapPtr = (P_TEMPORARY_DATA_BUF_MAP)TEMPORARY_DATA_BUFFER_MAP_ADDR;
 
-	for(bufEntry = 0; bufEntry < AVAILABLE_DATA_BUFFER_ENTRY_COUNT + AVAILABLE_ZNS_DATA_BUFFER_ENTRY_COUNT; bufEntry++)
+	for(bufEntry = 0; bufEntry < AVAILABLE_DATA_BUFFER_ENTRY_COUNT + OPEN_ZONE_DATA_BUFFER_ENTRY_COUNT + ACTIVE_ZONE_READ_BUFFER_ENTRY_COUNT; bufEntry++)
 	{
 		dataBufMapPtr->dataBuf[bufEntry].logicalSliceAddr = LSA_NONE;
 		dataBufMapPtr->dataBuf[bufEntry].prevEntry = bufEntry-1;
