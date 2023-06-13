@@ -119,7 +119,7 @@ void incrementDataBufPointer(unsigned int zoneID){
 	zoneMapPtr->zoneReg[zoneID].Buffer_Idx = (zoneMapPtr->zoneReg[zoneID].Buffer_Idx + 1) % DATA_BUFFER_ENTRY_COUNT_PER_ZONE;
 }
 
-unsigned int checkZoneDataBuf(unsigned int reqSlotTag, unsigned int zoneID){
+unsigned int checkZoneWriteDataBuf(unsigned int reqSlotTag, unsigned int zoneID){
 	unsigned int LatestdataBufEntry = GetZoneDataBuf(zoneID, -1);
 	unsigned int slice_diff = dataBufMapPtr->dataBuf[LatestdataBufEntry].logicalSliceAddr - reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr;
 
@@ -168,7 +168,8 @@ void ZNS_ReqTransSliceToLowLevel(unsigned int reqSlotTag){
 		reqPoolPtr->reqPool[reqSlotTag].dataBufInfo.entry = dataBufEntry;
 
 		ZNS_EvictDataBufEntry(zoneID, reqSlotTag);
-		incrementDataBufPointer(zoneID);
+		if(dataBufEntry != last_dataBufEntry)
+			incrementDataBufPointer(zoneID);
 
 		dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr = reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr;
 
@@ -185,7 +186,7 @@ void ZNS_ReqTransSliceToLowLevel(unsigned int reqSlotTag){
 	else if (reqPoolPtr->reqPool[reqSlotTag].reqCode == REQ_CODE_READ){
 		unsigned int ReadFromNand = 0;
 		
-		dataBufEntry = checkZoneDataBuf(reqSlotTag, zoneID);
+		dataBufEntry = checkZoneWriteDataBuf(reqSlotTag, zoneID);
 		if(dataBufEntry == DATA_BUF_FAIL){
 			unsigned base = AVAILABLE_DATA_BUFFER_ENTRY_COUNT + MAXIMUM_OPEN_ZONE_COUNT * DATA_BUFFER_ENTRY_COUNT_PER_ZONE;
 			unsigned key = reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr % SLICE_PER_STRIPE;
