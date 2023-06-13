@@ -150,7 +150,7 @@ unsigned int checkZoneDataBuf(unsigned int reqSlotTag, unsigned int zoneID){
 }
 
 void ZNS_ReqTransSliceToLowLevel(unsigned int reqSlotTag){
-    unsigned int zoneID, dataBufEntry;
+    unsigned int zoneID, dataBufEntry, last_dataBufEntry;
 
 	zoneID = Lsa2ZoneId(reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr);
 
@@ -158,6 +158,13 @@ void ZNS_ReqTransSliceToLowLevel(unsigned int reqSlotTag){
 	
 	if(reqPoolPtr->reqPool[reqSlotTag].reqCode == REQ_CODE_WRITE){
 		dataBufEntry = GetZoneDataBuf(zoneID, 0);
+		
+		// In case write smaller than a slice
+		last_dataBufEntry = GetZoneDataBuf(zoneID, -1);
+		if(dataBufMapPtr->dataBuf[last_dataBufEntry].logicalSliceAddr == reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr){
+			dataBufEntry = last_dataBufEntry;
+		}
+
 		reqPoolPtr->reqPool[reqSlotTag].dataBufInfo.entry = dataBufEntry;
 
 		ZNS_EvictDataBufEntry(zoneID, reqSlotTag);
