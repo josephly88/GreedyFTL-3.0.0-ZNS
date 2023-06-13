@@ -372,6 +372,12 @@ void handle_identify(NVME_ADMIN_COMMAND *nvmeAdminCmd, NVME_COMPLETION *nvmeCPL)
 	nvmeCPL->specific = 0x0;
 }
 
+void handle_abort(NVME_ADMIN_COMMAND *nvmeAdminCmd, NVME_COMPLETION *nvmeCPL)
+{
+	nvmeCPL->dword[0] = 0;
+	nvmeCPL->specific = 0x0;
+}
+
 void handle_get_log_page(NVME_ADMIN_COMMAND *nvmeAdminCmd, NVME_COMPLETION *nvmeCPL)
 {
 	//ADMIN_GET_LOG_PAGE_DW10 getLogPageInfo;
@@ -437,6 +443,11 @@ void handle_nvme_admin_cmd(NVME_COMMAND *nvmeCmd)
 		case ADMIN_IDENTIFY:
 		{
 			handle_identify(nvmeAdminCmd, &nvmeCPL);
+			break;
+		}
+		case ADMIN_ABORT:
+		{
+			handle_abort(nvmeAdminCmd, &nvmeCPL);
 			break;
 		}
 		case ADMIN_GET_FEATURES:
