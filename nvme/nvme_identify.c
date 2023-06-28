@@ -239,7 +239,7 @@ void identify_controller_ioset(unsigned int pBuffer)
 	identify4096B = (ADMIN_IDENTIFY_4096B*)pBuffer;
 
 	memset(identify4096B, 0, sizeof(ADMIN_IDENTIFY_4096B));
-	identify4096B->id0 = 0x2;
+	identify4096B->id0 = 0x0;
 }
 
 
