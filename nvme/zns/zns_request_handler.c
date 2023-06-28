@@ -126,7 +126,7 @@ unsigned int checkZoneWriteDataBuf(unsigned int reqSlotTag, unsigned int zoneID)
 	if(slice_diff < SLICE_PER_STRIPE){
 		unsigned int dataBufEntry = GetZoneDataBuf(zoneID, -(1+slice_diff));
 		if(dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr == reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr){
-			xil_printf("\tHit: Slice_diff : %d\r\n", slice_diff);
+			//xil_printf("\tHit: Slice_diff : %d\r\n", slice_diff);
 			return dataBufEntry;
 		}
 		else{
@@ -140,7 +140,7 @@ unsigned int checkZoneWriteDataBuf(unsigned int reqSlotTag, unsigned int zoneID)
 		for(i = 0; i < MAXIMUM_OPEN_ZONE_COUNT; i++){
 			unsigned int dataBufEntry = base + i * SLICE_PER_STRIPE + key;
 			if(dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr == reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr){
-				xil_printf("\tRead Buffer Hit: dataBufEntry : %d\r\n", dataBufEntry);
+				//xil_printf("\tRead Buffer Hit: dataBufEntry : %d\r\n", dataBufEntry);
 				return dataBufEntry;
 			}
 		}
@@ -185,7 +185,8 @@ void ZNS_ReqTransSliceToLowLevel(unsigned int reqSlotTag){
 		//xil_printf("Write Req. DataBufEntry : %d, SliceAddr : 0x%x\r\n", dataBufEntry, dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr);
 	}
 	else if (reqPoolPtr->reqPool[reqSlotTag].reqCode == REQ_CODE_READ){
-		xil_printf("Catch a ZNS Request LogicalSliceAddr : 0x%x, zone ID : %d \r\n", reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr, zoneID);
+
+		//xil_printf("Catch a ZNS Request LogicalSliceAddr : 0x%x, zone ID : %d \r\n", reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr, zoneID);
 
 		unsigned int ReadFromNand = 0;
 		
@@ -199,15 +200,14 @@ void ZNS_ReqTransSliceToLowLevel(unsigned int reqSlotTag){
 			dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr = reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr;
 
 			ReadFromNand = 1;
-			xil_printf("\tRead Buffer Miss: Read NAND to dataBufEntry : %d\r\n", dataBufEntry);
-			xil_printf("\treadBufPtr (row, column) : %d, %d\r\n", zoneMapPtr->readBufPtr[key], key);
+			//xil_printf("\tRead Buffer Miss: Read NAND to dataBufEntry : %d\r\n", dataBufEntry);
 		}
 
 		reqPoolPtr->reqPool[reqSlotTag].dataBufInfo.entry = dataBufEntry;
 		if(ReadFromNand == 1)
 			ZNS_DataReadFromNand(reqSlotTag);
 		reqPoolPtr->reqPool[reqSlotTag].reqCode = REQ_CODE_TxDMA;
-		xil_printf("Read Req. DataBufEntry : %d, SliceAddr : 0x%x\r\n", dataBufEntry, dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr);
+		//xil_printf("Read Req. DataBufEntry : %d, SliceAddr : 0x%x\r\n", dataBufEntry, dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr);
 	}
 	else{
 		assert(!"[WARNING] Not supported reqCode. [WARNING]");
