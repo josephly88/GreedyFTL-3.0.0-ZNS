@@ -1,64 +1,60 @@
 #ifndef __ZNS_H_
 #define __ZNS_H_
 
+#include "math.h"
 #include "../../ftl_config.h"
 
-#define ZNS_IO_COMMAND_SET									1
+/*-------------------------------------------------------------
+		Section : Input Parameters
+-------------------------------------------------------------*/
+#define ZNS_IO_COMMAND_SET									1			// 0-Normal, 1-ZNS
+
+// Row Group: 1-8192 (Must be a factor of 8192 (USER_BLOCKS_PER_DIE). E.g., 8192 / 1024 = 8 that has no remainder)
+#define NUM_OF_BLOCK_PER_ZONE								16			// 1 Block : 2MB
+// Column Group: 1-64 (Must be a factor of 64 (USER_DIES). E.g., 64 / 4 = 16 that has no remainder)
+#define NUM_OF_DIE_PER_ZONE									64		
+
+#define MAXIMUM_OPEN_ZONE_COUNT                  			1
+#define ZNS_LBA_START_NVME_BLOCK							0x100000	// 0x100000 * 0x1000 (NVMe Block Size: 4KB) = 4GB
+
+/*-------------------------------------------------------------
+		Section : Output Parameters
+-------------------------------------------------------------*/
 
 /* NVME_BLOCKS_PER_ZONE: Zone Capacity */
-#define MB_PER_ZONE											(2*1024)		// 2GB
-#define NVME_BLOCKS_PER_ZONE								((MB_PER_ZONE * 1024) / (BYTES_PER_NVME_BLOCK / 1024))		// 2GB / 4KB (NVMe Block Size)
-#define SLICE_PER_ZONE										(NVME_BLOCKS_PER_ZONE / NVME_BLOCKS_PER_SLICE)
+#define MB_PER_ZONE											(MB_PER_BLOCK * NUM_OF_BLOCK_PER_ZONE * NUM_OF_DIE_PER_ZONE)
+#define NVME_BLOCKS_PER_ZONE								((MB_PER_ZONE * 1024) / (BYTES_PER_NVME_BLOCK / 1024))		// NVMe Block Size: 4KB
+#define SLICE_PER_ZONE										(NVME_BLOCKS_PER_ZONE / NVME_BLOCKS_PER_SLICE)			
+
+/* Zone Group: # of Block Group Per Die */
+#define BLOCK_GROUP_IN_ROW									(8192 / NUM_OF_BLOCK_PER_ZONE)
+#define BLOCK_GROUP_IN_COLUMN								(64 / NUM_OF_DIE_PER_ZONE)
+#define BLOCK_GROUP_PER_SSD									(BLOCK_GROUP_IN_ROW * BLOCK_GROUP_IN_COLUMN)
 
 /* Zone NVMe LBA Range */
-#define MAXIMUM_OPEN_ZONE_COUNT                  			1 				// 1073741824 / ZONE_SIZE		// 1TB / Zone size 
-#define ZNS_LBA_START										0x8000000	// 0.5 TB / 4KB (NVMe Block Size)
-#define ZNS_LBA_END											(ZNS_LBA_START + (MAXIMUM_OPEN_ZONE_COUNT * NVME_BLOCKS_PER_ZONE))
-#define ZNS_LSA_START										(ZNS_LBA_START / NVME_BLOCKS_PER_SLICE)
-#define ZNS_LSA_END											(ZNS_LBA_END / NVME_BLOCKS_PER_SLICE)
-
-/* Zone Group: # of Flash Block */
-#define BLOCK_GROUP_PER_SSD									(1024*1024 / MB_PER_ZONE)		// 1TB / 2GB = 512
-#define BLOCK_LAYER_PER_BLOCK_GROUP							(USER_BLOCKS_PER_DIE / BLOCK_GROUP_PER_SSD)
-
-#define SLICE_PER_STRIPE									(USER_DIES)
-#define SLICE_PER_BLOCK_LAYER								(USER_DIES * SLICES_PER_BLOCK)
-#define SLICE_PER_BLOCK_GROUP								(BLOCK_LAYER_PER_BLOCK_GROUP * SLICE_PER_BLOCK_LAYER)
-
-#define ZONE_BLOCK_GROUP_START								256
-#define ZONE_BLOCK_GROUP_END								(ZONE_BLOCK_GROUP_START + MAXIMUM_OPEN_ZONE_COUNT)
+#define ZNS_LBA_END_NVME_BLOCK								(ZNS_LBA_START_NVME_BLOCK + (MAXIMUM_OPEN_ZONE_COUNT * NVME_BLOCKS_PER_ZONE) - 1)
+#define ZNS_LSA_START										(ZNS_LBA_START_NVME_BLOCK / NVME_BLOCKS_PER_SLICE)
+#define ZNS_LSA_END											(ZNS_LBA_END_NVME_BLOCK / NVME_BLOCKS_PER_SLICE)
 
 /* Zone Data Buffer Range */
+#define SLICE_PER_STRIPE									(NUM_OF_DIE_PER_ZONE)
 #define DATA_BUFFER_STRIPE_PER_ZONE							2
 #define DATA_BUFFER_ENTRY_COUNT_PER_ZONE					(SLICE_PER_STRIPE * DATA_BUFFER_STRIPE_PER_ZONE)
 #define OPEN_ZONE_DATA_BUFFER_ENTRY_COUNT					(MAXIMUM_OPEN_ZONE_COUNT * DATA_BUFFER_ENTRY_COUNT_PER_ZONE)
 #define ACTIVE_ZONE_READ_BUFFER_ENTRY_COUNT					(MAXIMUM_OPEN_ZONE_COUNT * SLICE_PER_STRIPE)
 
-/*Opcodes for ZNS IO Commands */
-#define IO_ZNS_MANAGEMENT_SEND								0x79
-#define IO_ZNS_MANAGEMENT_RECEIVE							0x7A
+#define ZONE_BLOCK_GROUP_START								(ZNS_LBA_START_NVME_BLOCK / NVME_BLOCKS_PER_ZONE)
+#define ZONE_BLOCK_GROUP_END								(ZONE_BLOCK_GROUP_START + MAXIMUM_OPEN_ZONE_COUNT)
 
-/* Zone Descriptor - Zone State (ZS) */
-#define EMPTY												0x1
-#define IMPLICITLY_OPENED									0x2
-#define EXPLICITLY_OPENED									0x3
-#define CLOSED												0x4
-#define READ_ONLY											0xD
-#define FULL												0xE
-#define OFFLINE												0xF
+/*-------------------------------------------------------------
+		Section : Strcut for ZNS Metadata
+-------------------------------------------------------------*/
 
-/* Zone Mangaement Send Zone Send Action (ZSA) */
-#define CLOSE_ZONE											0x1
-#define FINISH_ZONE											0x2
-#define OPEN_ZONE											0x3
-#define RESET_ZONE											0x4
-#define OFFLINE_ZONE										0x5
-#define SET_ZONE_DESCRIPTOR_EXTENSION						0x10
-
-#define Lba2ZoneId(lba)										((lba / NVME_BLOCKS_PER_ZONE) - ZONE_BLOCK_GROUP_START)
-#define Lsa2ZoneId(logicalSliceAddr)						((logicalSliceAddr / SLICE_PER_ZONE) - ZONE_BLOCK_GROUP_START)
-
-#define Lsa2Lva(logicalSliceAddr)							(logicalSliceAddr)
+#define PAGE_COLUMN_BITS									((int)log2(NUM_OF_DIE_PER_ZONE))
+#define PAGE_ROW_BITS										((int)log2(128))
+#define DIE_GROUP_BITS										((int)log2((64/NUM_OF_DIE_PER_ZONE)))
+#define INNER_ZONE_BLOCK_ROW_BITS							((int)log2(NUM_OF_BLOCK_PER_ZONE))
+#define OUTER_ZONE_BLOCK_ROW_BITS							((int)log2(8192/NUM_OF_BLOCK_PER_ZONE))
 
 // Temporarily Zone Size: 2GB
 typedef struct _ZNS_ADDR
@@ -67,11 +63,11 @@ typedef struct _ZNS_ADDR
         unsigned int dword;
         struct{
 			// A Block Layer is 128 MB if spaning all the channels x die (15-bits)
-			unsigned int PAGE_COLUMN_ID     			:6;     	// # way * # ch / 2^(# FCG - 1) : 8 * 8 / 2 ^ 0 = 64 -> 6 bits
-            unsigned int PAGE_ROW_ID        			:7;     	// # pages in a block : 128 -> 7 bits
-            //unsigned int FCG_ID             :0;   	// # FCG - 1 : (1-1) = 0
-			unsigned int INNER_BLOCK_GROUP_ROW_ID		:4;			// 2GB / 128MB = 16 -> 4 bits
-            unsigned int OUTER_BLOCK_GROUP_ROW_ID 		:15;     	// 32 - the bits above (Actually 1TB/2GB = 512 -> 9 bits is really using)
+			unsigned int PAGE_COLUMN_ID     			:PAGE_COLUMN_BITS;
+            unsigned int PAGE_ROW_ID        			:PAGE_ROW_BITS;
+            //unsigned int DIE_GROUP_ID       			:DIE_GROUP_BITS;
+			//unsigned int INNER_BLOCK_GROUP_ROW_ID		:INNER_ZONE_BLOCK_ROW_BITS;
+            unsigned int OUTER_BLOCK_GROUP_ROW_ID 		:OUTER_ZONE_BLOCK_ROW_BITS; 
         };
     };
 }ZNS_ADDR;
@@ -97,6 +93,36 @@ typedef struct _ZONE_MAP
     ZONE_REG zoneReg[MAXIMUM_OPEN_ZONE_COUNT];
 	unsigned int readBufPtr[64];
 } ZONE_MAP, *P_ZONE_MAP;
+
+#define Lba2ZoneId(lba)										((lba / NVME_BLOCKS_PER_ZONE) - ZONE_BLOCK_GROUP_START)
+#define Lsa2ZoneId(logicalSliceAddr)						((logicalSliceAddr / SLICE_PER_ZONE) - ZONE_BLOCK_GROUP_START)
+
+#define Lsa2Lva(logicalSliceAddr)							(logicalSliceAddr)
+
+/*-------------------------------------------------------------
+		Section : NVMe ZNS Command Specification
+-------------------------------------------------------------*/
+
+/*Opcodes for ZNS IO Commands */
+#define IO_ZNS_MANAGEMENT_SEND								0x79
+#define IO_ZNS_MANAGEMENT_RECEIVE							0x7A
+
+/* Zone Descriptor - Zone State (ZS) */
+#define EMPTY												0x1
+#define IMPLICITLY_OPENED									0x2
+#define EXPLICITLY_OPENED									0x3
+#define CLOSED												0x4
+#define READ_ONLY											0xD
+#define FULL												0xE
+#define OFFLINE												0xF
+
+/* Zone Mangaement Send Zone Send Action (ZSA) */
+#define CLOSE_ZONE											0x1
+#define FINISH_ZONE											0x2
+#define OPEN_ZONE											0x3
+#define RESET_ZONE											0x4
+#define OFFLINE_ZONE										0x5
+#define SET_ZONE_DESCRIPTOR_EXTENSION						0x10
 
 /* ZNS Identify Namespace Data Structure */
 typedef struct _ADMIN_IDENTIFY_ZNS_COMMAND_SET

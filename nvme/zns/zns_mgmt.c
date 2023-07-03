@@ -16,7 +16,7 @@ void handle_zns_close_zone(IO_ZNS_ZONE_MANGAEMENT_SEND_DW13 mgmtSendInfo, unsign
         }
     }
     else{
-        unsigned int zone_id = (SLBA - ZNS_LBA_START) / NVME_BLOCKS_PER_ZONE;
+        unsigned int zone_id = (SLBA - ZNS_LBA_START_NVME_BLOCK) / NVME_BLOCKS_PER_ZONE;
 
         if(zone_id >= MAXIMUM_OPEN_ZONE_COUNT){
             xil_printf("SLBA out of range: 0x%X\r\n", SLBA);
@@ -48,7 +48,7 @@ void handle_zns_finish_zone(IO_ZNS_ZONE_MANGAEMENT_SEND_DW13 mgmtSendInfo, unsig
         }
     }
     else{
-        unsigned int zone_id = (SLBA - ZNS_LBA_START) / NVME_BLOCKS_PER_ZONE;
+        unsigned int zone_id = (SLBA - ZNS_LBA_START_NVME_BLOCK) / NVME_BLOCKS_PER_ZONE;
 
         if(zone_id >= MAXIMUM_OPEN_ZONE_COUNT){
             xil_printf("SLBA out of range: 0x%X\r\n", SLBA);
@@ -79,7 +79,7 @@ void handle_zns_open_zone(IO_ZNS_ZONE_MANGAEMENT_SEND_DW13 mgmtSendInfo, unsigne
         }
     }
     else{
-        unsigned int zone_id = (SLBA - ZNS_LBA_START) / NVME_BLOCKS_PER_ZONE;
+        unsigned int zone_id = (SLBA - ZNS_LBA_START_NVME_BLOCK) / NVME_BLOCKS_PER_ZONE;
 
         if(zone_id >= MAXIMUM_OPEN_ZONE_COUNT){
             xil_printf("SLBA out of range: 0x%X\r\n", SLBA);
@@ -111,7 +111,7 @@ void handle_zns_reset_zone(IO_ZNS_ZONE_MANGAEMENT_SEND_DW13 mgmtSendInfo, unsign
         }
     }
     else{
-        unsigned int zone_id = (SLBA - ZNS_LBA_START) / NVME_BLOCKS_PER_ZONE;
+        unsigned int zone_id = (SLBA - ZNS_LBA_START_NVME_BLOCK) / NVME_BLOCKS_PER_ZONE;
 
         if(zone_id >= MAXIMUM_OPEN_ZONE_COUNT){
             xil_printf("SLBA out of range: 0x%X\r\n", SLBA);
@@ -143,7 +143,7 @@ void handle_zns_offline_zone(IO_ZNS_ZONE_MANGAEMENT_SEND_DW13 mgmtSendInfo, unsi
         }
     }
     else{
-        unsigned int zone_id = (SLBA - ZNS_LBA_START) / NVME_BLOCKS_PER_ZONE;
+        unsigned int zone_id = (SLBA - ZNS_LBA_START_NVME_BLOCK) / NVME_BLOCKS_PER_ZONE;
 
         if(zone_id >= MAXIMUM_OPEN_ZONE_COUNT){
             xil_printf("SLBA out of range: 0x%X\r\n", SLBA);

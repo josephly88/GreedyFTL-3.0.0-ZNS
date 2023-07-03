@@ -14,8 +14,28 @@ P_ZONE_MAP zoneMapPtr;
 
 void InitZNS()
 {
-    zoneMapPtr = (P_ZONE_MAP) ZONE_MAP_ADDR;
+	// PRINTING
+	xil_printf("\r\n");
+	xil_printf("ZNS Initialization\r\n");
+	xil_printf("- MB_PER_ZONE: %d\r\n", MB_PER_ZONE);
+	xil_printf("- BLOCK_GROUP_PER_SSD: %d\r\n", BLOCK_GROUP_PER_SSD);
+	xil_printf("- ZONE_BLOCK_GROUP_START: %d\r\n", ZONE_BLOCK_GROUP_START);
+	xil_printf("\r\n");
+	xil_printf("Address Translation\r\n");
+	xil_printf("- PAGE_COLUMN_BITS: %d\r\n", PAGE_COLUMN_BITS);
+	xil_printf("- PAGE_ROW_BITS: %d\r\n", PAGE_ROW_BITS);
+	xil_printf("- DIE_GROUP_BITS: %d\r\n", DIE_GROUP_BITS);
+	xil_printf("- INNER_ZONE_BLOCK_ROW_BITS: %d\r\n", INNER_ZONE_BLOCK_ROW_BITS);
+	xil_printf("- OUTER_ZONE_BLOCK_ROW_BITS: %d\r\n", OUTER_ZONE_BLOCK_ROW_BITS);
+	xil_printf("\r\n");
 
+    // Initialize Physical Block Group to Zone
+	
+	
+	
+	zoneMapPtr = (P_ZONE_MAP) ZONE_MAP_ADDR;
+
+	// Initialize ZNS Metadata
     zoneMapPtr->Num_Open_Zone = 0;
     zoneMapPtr->Num_Close_Zone = 0;
     zoneMapPtr->Num_Full_Zone = 0;
@@ -23,16 +43,18 @@ void InitZNS()
     zoneMapPtr->Num_Read_Zone = 0;
     zoneMapPtr->Num_Off_Zone = 0;
 
+	// Initialize Zone Metadata
     int i;
     for (i = 0; i < MAXIMUM_OPEN_ZONE_COUNT; i++){
         zoneMapPtr->zoneReg[i].Zone_ID = i;
         zoneMapPtr->zoneReg[i].OUTER_BLOCK_GROUP_ROW_ID = 0;
         zoneMapPtr->zoneReg[i].Zone_State = EMPTY;
-        zoneMapPtr->zoneReg[i].SLBA = ZNS_LBA_START + i * NVME_BLOCKS_PER_ZONE;
+        zoneMapPtr->zoneReg[i].SLBA = ZNS_LBA_START_NVME_BLOCK + i * NVME_BLOCKS_PER_ZONE;
         zoneMapPtr->zoneReg[i].Write_Pointer = zoneMapPtr->zoneReg[i].SLBA;
         zoneMapPtr->zoneReg[i].Buffer_Idx = 0;
     }
 
+	// Initialize Read Buffer
 	for(i = 0; i < SLICE_PER_STRIPE; i++){
 		zoneMapPtr->readBufPtr[i] = 0;
 	}
