@@ -58,6 +58,9 @@ V2FMCRegisters* chCtlReg[USER_CHANNELS];
 
 void InitFTL()
 {
+	if(ZNS_IO_COMMAND_SET == 1)
+		InitZNS();
+
 	CheckConfigRestriction();
 
 	InitChCtlReg();
@@ -68,8 +71,6 @@ void InitFTL()
 	InitAddressMap();
 	InitDataBuf();
 	InitGcVictimMap();
-
-	InitZNS();
 
 	storageCapacity_L = (MB_PER_SSD - (MB_PER_MIN_FREE_BLOCK_SPACE + mbPerbadBlockSpace + MB_PER_OVER_PROVISION_BLOCK_SPACE)) * ((1024*1024) / BYTES_PER_NVME_BLOCK);
 

@@ -5,6 +5,10 @@
 
 void InitZNS();
 
+void eliminateBadBlockGroups();
+
+void shuffleValidBlockGroups();
+
 int ZoneWriteCheck(unsigned int slba, unsigned int numOfSlice);
 
 int ZoneReadCheck(unsigned int slba, unsigned int nlb);

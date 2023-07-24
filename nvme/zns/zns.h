@@ -15,6 +15,7 @@
 #define NUM_OF_DIE_PER_ZONE									64		
 
 #define MAXIMUM_OPEN_ZONE_COUNT                  			1
+#define MAXIMUM_ACTIVE_ZONE_COUNT                  			1
 #define ZNS_LBA_START_NVME_BLOCK							0x100000	// 0x100000 * 0x1000 (NVMe Block Size: 4KB) = 4GB
 
 /*-------------------------------------------------------------
@@ -30,6 +31,7 @@
 #define BLOCK_GROUP_IN_ROW									(8192 / NUM_OF_BLOCK_PER_ZONE)
 #define BLOCK_GROUP_IN_COLUMN								(64 / NUM_OF_DIE_PER_ZONE)
 #define BLOCK_GROUP_PER_SSD									(BLOCK_GROUP_IN_ROW * BLOCK_GROUP_IN_COLUMN)
+#define BLOCK_PER_BLOCK_GROUP								(NUM_OF_BLOCK_PER_ZONE * NUM_OF_DIE_PER_ZONE)
 
 /* Zone NVMe LBA Range */
 #define ZNS_LBA_END_NVME_BLOCK								(ZNS_LBA_START_NVME_BLOCK + (MAXIMUM_OPEN_ZONE_COUNT * NVME_BLOCKS_PER_ZONE) - 1)
@@ -93,6 +95,8 @@ typedef struct _ZONE_MAP
     ZONE_REG zoneReg[MAXIMUM_OPEN_ZONE_COUNT];
 	unsigned int readBufPtr[64];
 } ZONE_MAP, *P_ZONE_MAP;
+
+typedef int VALID_BLOCK_SHUFFLE_LIST, *P_VALID_BLOCK_SHUFFLE_LIST;
 
 #define Lba2ZoneId(lba)										((lba / NVME_BLOCKS_PER_ZONE) - ZONE_BLOCK_GROUP_START)
 #define Lsa2ZoneId(logicalSliceAddr)						((logicalSliceAddr / SLICE_PER_ZONE) - ZONE_BLOCK_GROUP_START)

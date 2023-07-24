@@ -10,7 +10,16 @@
 
 #include "../../data_buffer.h"
 
+#include <stdlib.h>
+#include "xtime_l.h"
+
 P_ZONE_MAP zoneMapPtr;
+P_VALID_BLOCK_SHUFFLE_LIST validBlockShuffleList;
+int validCnt;
+
+// Bad block tuples (Assume the tuples are sorted)
+// {4052, 4057} means virtual blocks 4052 - 4057 are bad blocks
+int BadBlockTuples[] = {4052, 4057};
 
 void InitZNS()
 {
@@ -29,6 +38,13 @@ void InitZNS()
 	xil_printf("- OUTER_ZONE_BLOCK_ROW_BITS: %d\r\n", OUTER_ZONE_BLOCK_ROW_BITS);
 	xil_printf("\r\n");
 
+	
+	validBlockShuffleList = (P_VALID_BLOCK_SHUFFLE_LIST) VALID_BLOCK_SHUFFLE_LIST_ADDR;
+	validCnt = 0;
+
+	eliminateBadBlockGroups();
+	shuffleValidBlockGroups();
+
     // Initialize Physical Block Group to Zone
 	
 	
@@ -44,7 +60,6 @@ void InitZNS()
     zoneMapPtr->Num_Off_Zone = 0;
 
 	// Initialize Zone Metadata
-    int i;
     for (i = 0; i < MAXIMUM_OPEN_ZONE_COUNT; i++){
         zoneMapPtr->zoneReg[i].Zone_ID = i;
         zoneMapPtr->zoneReg[i].OUTER_BLOCK_GROUP_ROW_ID = 0;
@@ -57,6 +72,85 @@ void InitZNS()
 	// Initialize Read Buffer
 	for(i = 0; i < SLICE_PER_STRIPE; i++){
 		zoneMapPtr->readBufPtr[i] = 0;
+	}
+}
+
+void eliminateBadBlockGroups(){
+	int i, badcnt, badDone;
+	
+	int BadBlockTuplesSize = (sizeof(BadBlockTuples)/sizeof(int));
+	if(BadBlockTuplesSize % 2 == 1)
+		assert(!"[Error] BadBlockTuples: The length must be even number [Error]");
+
+	badcnt = 0;
+	badDone = 0;
+
+	// Skip the bad block tuples that are smaller than the start of the zone
+	while(BadBlockTuples[badcnt+1] < ZONE_BLOCK_GROUP_START){
+		badcnt += 2;
+		if(badcnt >= BadBlockTuplesSize){ 	// Bad Block Tuples are exhausted
+			badDone = 1;
+			break;
+		}
+	}
+
+	// Prepare an array of valid block groups
+	for(i = ZONE_BLOCK_GROUP_START, validCnt = 0; i < BLOCK_GROUP_PER_SSD; i++){
+
+		while(BadBlockTuples[badcnt] < i*BLOCK_PER_BLOCK_GROUP){
+			badcnt++;
+			if(badcnt >= BadBlockTuplesSize){ 	// Bad Block Tuples are exhausted
+				badDone = 1;
+				break;
+			}
+		}
+
+		if(badDone == 0){
+			// Start of the intevals
+			if(badcnt % 2 == 0){
+				if((BadBlockTuples[badcnt] >= i*BLOCK_PER_BLOCK_GROUP) && BadBlockTuples[badcnt] < ((i+1)*BLOCK_PER_BLOCK_GROUP)){
+					xil_printf("Block Group - %d is skipped\r\n", i);
+					if(BadBlockTuples[badcnt+1] < ((i+1)*BLOCK_PER_BLOCK_GROUP)){
+						badcnt += 2;
+						if(badcnt >= BadBlockTuplesSize)	// Bad Block Tuples are exhausted
+							badDone = 1;
+					}
+					else{
+						badcnt += 1;
+					}
+					continue;
+				}
+			}
+			// End of the intevals
+			else{
+				if((BadBlockTuples[badcnt] >= i*BLOCK_PER_BLOCK_GROUP)){
+					xil_printf("Block Group - %d is skipped\r\n", i);
+					if(BadBlockTuples[badcnt] < ((i+1)*BLOCK_PER_BLOCK_GROUP)){
+						badcnt += 1;
+						if(badcnt >= BadBlockTuplesSize)	// Bad Block Tuples are exhausted
+							badDone = 1;
+					}
+					continue;
+				}
+			}
+		}
+
+		validBlockShuffleList[validCnt] = i;
+		validCnt++;
+	}
+}
+
+void shuffleValidBlockGroups(){
+	// Shuffle the validBlockShuffleList
+	int i;
+	XTime t;
+	XTime_GetTime(&t);
+	srand(t);
+	for(i = validCnt-1; i > 0; i--){
+		int r = rand() % (i+1);
+		int swap = validBlockShuffleList[r];
+		validBlockShuffleList[r] = validBlockShuffleList[i];
+		validBlockShuffleList[i] = swap;
 	}
 }
 
