@@ -218,7 +218,7 @@ void InitDieMap()
 void InitBlockMap()
 {
 	unsigned int dieNo, phyBlockNo, virtualBlockNo, remappedPhyBlock;
-	unsigned int GroupNo;
+	unsigned int rowNo, colNo, GroupNo;
 
 	for(dieNo=0 ; dieNo<USER_DIES ; dieNo++)
 	{
@@ -242,8 +242,10 @@ void InitBlockMap()
 			else{
 				// Blocks reserved for ZNS, Do not put to free block list
 				if(ZNS_IO_COMMAND_SET == 1){
-					GroupNo = virtualBlockNo / NUM_OF_BLOCK_PER_ZONE;
-					if(GroupNo >= ZONE_BLOCK_GROUP_START && GroupNo < ZONE_BLOCK_GROUP_END)
+					rowNo = virtualBlockNo / NUM_OF_BLOCK_PER_ZONE;
+					colNo = dieNo / NUM_OF_DIE_PER_ZONE;
+					GroupNo = rowNo * BLOCK_GROUP_IN_COLUMN + colNo;
+					if(GroupNo >= ZONE_BLOCK_GROUP_START)
 						continue;
 				}
 				PutToFbList(dieNo, virtualBlockNo);
@@ -811,7 +813,11 @@ void EraseBlock(unsigned int dieNo, unsigned int blockNo)
 	virtualBlockMapPtr->block[dieNo][blockNo].invalidSliceCnt = 0;
 	virtualBlockMapPtr->block[dieNo][blockNo].currentPage = 0;
 
-	if(ZNS_IO_COMMAND_SET == 0 || ((blockNo / NUM_OF_BLOCK_PER_ZONE) < ZONE_BLOCK_GROUP_START || (blockNo / NUM_OF_BLOCK_PER_ZONE) >= ZONE_BLOCK_GROUP_END))
+	int rowNo = blockNo / NUM_OF_BLOCK_PER_ZONE;
+	int colNo = dieNo / NUM_OF_DIE_PER_ZONE;
+	int GroupNo = rowNo * BLOCK_GROUP_IN_COLUMN + colNo;
+
+	if(ZNS_IO_COMMAND_SET == 0 || GroupNo < ZONE_BLOCK_GROUP_START)
 		PutToFbList(dieNo, blockNo);
 
 	for(pageNo=0; pageNo<USER_PAGES_PER_BLOCK; pageNo++)

@@ -46,7 +46,6 @@
 #define ACTIVE_ZONE_READ_BUFFER_ENTRY_COUNT					(MAXIMUM_OPEN_ZONE_COUNT * SLICE_PER_STRIPE)
 
 #define ZONE_BLOCK_GROUP_START								(ZNS_LBA_START_NVME_BLOCK / NVME_BLOCKS_PER_ZONE)
-#define ZONE_BLOCK_GROUP_END								(ZONE_BLOCK_GROUP_START + MAXIMUM_OPEN_ZONE_COUNT)
 
 /*-------------------------------------------------------------
 		Section : Strcut for ZNS Metadata
@@ -77,11 +76,11 @@ typedef struct _ZNS_ADDR
 typedef struct _ZONE_REG
 {
     unsigned int Zone_ID;
-    unsigned int OUTER_BLOCK_GROUP_ROW_ID;
     unsigned char Zone_State;
 	unsigned int SLBA;
     unsigned int Write_Pointer;
 	unsigned int Buffer_Idx;
+	unsigned int Phy_Block_Group_ID;
 } ZONE_REG;
 
 typedef struct _ZONE_MAP
@@ -96,7 +95,13 @@ typedef struct _ZONE_MAP
 	unsigned int readBufPtr[64];
 } ZONE_MAP, *P_ZONE_MAP;
 
-typedef int VALID_BLOCK_SHUFFLE_LIST, *P_VALID_BLOCK_SHUFFLE_LIST;
+typedef struct _VALID_BLOCK_GROUP_FIFO
+{
+	unsigned int FIFO_LIST[BLOCK_GROUP_PER_SSD];
+	unsigned int Valid_Count;
+	int Head;	// Head of FIFO
+	int Rear;	// Tail of FIFO
+} VALID_BLOCK_GROUP_FIFO, *P_VALID_BLOCK_GROUP_FIFO;
 
 #define Lba2ZoneId(lba)										((lba / NVME_BLOCKS_PER_ZONE) - ZONE_BLOCK_GROUP_START)
 #define Lsa2ZoneId(logicalSliceAddr)						((logicalSliceAddr / SLICE_PER_ZONE) - ZONE_BLOCK_GROUP_START)

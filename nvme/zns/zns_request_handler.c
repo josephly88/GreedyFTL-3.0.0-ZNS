@@ -14,8 +14,7 @@
 #include "xtime_l.h"
 
 P_ZONE_MAP zoneMapPtr;
-P_VALID_BLOCK_SHUFFLE_LIST validBlockShuffleList;
-int validCnt;
+P_VALID_BLOCK_GROUP_FIFO validBlockGroupFifoPtr;
 
 // Bad block tuples (Assume the tuples are sorted)
 // {4052, 4057} means virtual blocks 4052 - 4057 are bad blocks
@@ -39,15 +38,14 @@ void InitZNS()
 	xil_printf("\r\n");
 
 	
-	validBlockShuffleList = (P_VALID_BLOCK_SHUFFLE_LIST) VALID_BLOCK_SHUFFLE_LIST_ADDR;
-	validCnt = 0;
+	validBlockGroupFifoPtr = (P_VALID_BLOCK_GROUP_FIFO) VALID_BLOCK_GROUP_FIFO_ADDR;
+	validBlockGroupFifoPtr->Valid_Count = 0;
 
 	eliminateBadBlockGroups();
-	shuffleValidBlockGroups();
+	shuffleValidBlockGroups();	
 
-    // Initialize Physical Block Group to Zone
-	
-	
+	validBlockGroupFifoPtr->Head = 0;
+	validBlockGroupFifoPtr->Rear = validBlockGroupFifoPtr->Valid_Count - 1;
 	
 	zoneMapPtr = (P_ZONE_MAP) ZONE_MAP_ADDR;
 
@@ -55,18 +53,19 @@ void InitZNS()
     zoneMapPtr->Num_Open_Zone = 0;
     zoneMapPtr->Num_Close_Zone = 0;
     zoneMapPtr->Num_Full_Zone = 0;
-    zoneMapPtr->Num_Empty_Zone = MAXIMUM_OPEN_ZONE_COUNT;
+    zoneMapPtr->Num_Empty_Zone = MAXIMUM_ACTIVE_ZONE_COUNT;
     zoneMapPtr->Num_Read_Zone = 0;
     zoneMapPtr->Num_Off_Zone = 0;
 
 	// Initialize Zone Metadata
-    for (i = 0; i < MAXIMUM_OPEN_ZONE_COUNT; i++){
+	int i;
+    for (i = 0; i < MAXIMUM_ACTIVE_ZONE_COUNT; i++){
         zoneMapPtr->zoneReg[i].Zone_ID = i;
-        zoneMapPtr->zoneReg[i].OUTER_BLOCK_GROUP_ROW_ID = 0;
         zoneMapPtr->zoneReg[i].Zone_State = EMPTY;
         zoneMapPtr->zoneReg[i].SLBA = ZNS_LBA_START_NVME_BLOCK + i * NVME_BLOCKS_PER_ZONE;
         zoneMapPtr->zoneReg[i].Write_Pointer = zoneMapPtr->zoneReg[i].SLBA;
         zoneMapPtr->zoneReg[i].Buffer_Idx = 0;
+		zoneMapPtr->zoneReg[i].Phy_Block_Group_ID = 0;
     }
 
 	// Initialize Read Buffer
@@ -95,7 +94,7 @@ void eliminateBadBlockGroups(){
 	}
 
 	// Prepare an array of valid block groups
-	for(i = ZONE_BLOCK_GROUP_START, validCnt = 0; i < BLOCK_GROUP_PER_SSD; i++){
+	for(i = ZONE_BLOCK_GROUP_START; i < BLOCK_GROUP_PER_SSD; i++){
 
 		while(BadBlockTuples[badcnt] < i*BLOCK_PER_BLOCK_GROUP){
 			badcnt++;
@@ -135,8 +134,8 @@ void eliminateBadBlockGroups(){
 			}
 		}
 
-		validBlockShuffleList[validCnt] = i;
-		validCnt++;
+		validBlockGroupFifoPtr->FIFO_LIST[validBlockGroupFifoPtr->Valid_Count] = i;
+		validBlockGroupFifoPtr->Valid_Count++;
 	}
 }
 
@@ -146,12 +145,24 @@ void shuffleValidBlockGroups(){
 	XTime t;
 	XTime_GetTime(&t);
 	srand(t);
-	for(i = validCnt-1; i > 0; i--){
+	for(i = validBlockGroupFifoPtr->Valid_Count-1; i > 0; i--){
 		int r = rand() % (i+1);
-		int swap = validBlockShuffleList[r];
-		validBlockShuffleList[r] = validBlockShuffleList[i];
-		validBlockShuffleList[i] = swap;
+		int swap = validBlockGroupFifoPtr->FIFO_LIST[r];
+		validBlockGroupFifoPtr->FIFO_LIST[r] = validBlockGroupFifoPtr->FIFO_LIST[i];
+		validBlockGroupFifoPtr->FIFO_LIST[i] = swap;
 	}
+}
+
+unsigned int validBlockGroupFifo_Dequeue(){
+	int element = validBlockGroupFifoPtr->FIFO_LIST[validBlockGroupFifoPtr->Head];
+	validBlockGroupFifoPtr->Head = (validBlockGroupFifoPtr->Head + 1) % validBlockGroupFifoPtr->Valid_Count;
+
+	return element;
+}
+
+void validBlockGroupFifo_Enqueue(unsigned int element){
+	validBlockGroupFifoPtr->Rear = (validBlockGroupFifoPtr->Rear + 1) % validBlockGroupFifoPtr->Valid_Count;
+	validBlockGroupFifoPtr->FIFO_LIST[validBlockGroupFifoPtr->Rear] = element;
 }
 
 int ZoneWriteCheck(unsigned int slba, unsigned int nlb){
@@ -190,6 +201,7 @@ int ZoneWriteCheck(unsigned int slba, unsigned int nlb){
 	zoneMapPtr->zoneReg[zoneID].Write_Pointer += nlb;
 	if(zoneMapPtr->zoneReg[zoneID].Zone_State == EMPTY){
 		zoneMapPtr->zoneReg[zoneID].Zone_State = IMPLICITLY_OPENED;
+		zoneMapPtr->zoneReg[zoneID].Phy_Block_Group_ID = validBlockGroupFifo_Dequeue();
 	}
 	if(zoneMapPtr->zoneReg[zoneID].Write_Pointer >= zoneReg.SLBA + NVME_BLOCKS_PER_ZONE){
 		zoneMapPtr->zoneReg[zoneID].Zone_State = FULL;
