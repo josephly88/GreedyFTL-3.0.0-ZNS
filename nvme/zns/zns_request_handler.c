@@ -16,7 +16,7 @@
 P_ZONE_MAP zoneMapPtr;
 P_VALID_BLOCK_GROUP_FIFO validBlockGroupFifoPtr;
 
-// Bad block tuples (Assume the tuples are sorted)
+// Bad block tuples (Assume the tuples are sorted and not overlapped)
 // {4052, 4057} means virtual blocks 4052 - 4057 are bad blocks
 int BadBlockTuples[] = {4052, 4057};
 
