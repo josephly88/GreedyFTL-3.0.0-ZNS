@@ -96,18 +96,36 @@ void ReqTransNvmeToSlice(unsigned int cmdSlotTag, unsigned int startLba, unsigne
 		assert(!"[WARNING] Not supported command code [WARNING]");
 
 	if(ZNS_IO_COMMAND_SET){
-		if(cmdCode == IO_NVM_WRITE){
-			if(startLba >= ZNS_LBA_START_NVME_BLOCK && startLba <= ZNS_LBA_END_NVME_BLOCK){
-				if(ZoneWriteCheck(startLba, nlb + 1) == 0)
+		if(startLba >= ZNS_LBA_START_NVME_BLOCK && startLba < ZNS_LBA_END_NVME_BLOCK){
+			ZNS_LogicalSliceAddr* P_ZNS_tempLsa = (ZNS_LogicalSliceAddr*) &tempLsa;
+
+			xil_printf("Before: tempLsa = %d\r\n", tempLsa);
+
+			unsigned int zoneID = Lba2ZoneId(startLba);
+			if(zoneID < 0 || zoneID >= MAXIMUM_ACTIVE_ZONE_COUNT){
+				xil_printf("Zone ID Error: %d\r\n", zoneID);
+				return;
+			}
+
+			if(cmdCode == IO_NVM_WRITE){
+				if(ZoneWriteCheck(zoneID, startLba, nlb + 1) == 0)
 					return;
 			}
-		}
-		if(cmdCode == IO_NVM_READ){
-			if(startLba >= ZNS_LBA_START_NVME_BLOCK && startLba <= ZNS_LBA_END_NVME_BLOCK){
-				if(ZoneReadCheck(startLba, nlb + 1) == 0)
+			if(cmdCode == IO_NVM_READ){
+				if(ZoneReadCheck(zoneID, startLba, nlb + 1) == 0)
 					return;
 			}
-		}
+
+			P_ZNS_tempLsa->ZONE_ID = zoneID;	
+			xil_printf("After: tempLsa = %d, ZoneID = %d\r\n", tempLsa, zoneID);	
+
+			if(reqCode == REQ_CODE_WRITE)
+				reqCode = REQ_CODE_ZONE_WRITE;
+			else if(reqCode == REQ_CODE_READ)
+				reqCode = REQ_CODE_ZONE_READ;
+			else
+				assert(!"[WARNING] Not supported command code [WARNING]");
+		}		
 	}
 
 	//first transform
@@ -247,7 +265,7 @@ void ReqTransSliceToLowLevel()
 		if(reqSlotTag == REQ_SLOT_TAG_FAIL)
 			return ;
 
-		if(reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr >= ZNS_LSA_START && reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr < ZNS_LSA_END){
+		if(reqPoolPtr->reqPool[reqSlotTag].reqCode == REQ_CODE_ZONE_READ || reqPoolPtr->reqPool[reqSlotTag].reqCode == REQ_CODE_ZONE_WRITE){
 				// ZNS Request
 				ZNS_ReqTransSliceToLowLevel(reqSlotTag);
 		}

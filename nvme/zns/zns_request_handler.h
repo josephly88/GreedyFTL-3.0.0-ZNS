@@ -9,9 +9,9 @@ void eliminateBadBlockGroups();
 
 void shuffleValidBlockGroups();
 
-int ZoneWriteCheck(unsigned int slba, unsigned int numOfSlice);
+int ZoneWriteCheck(unsigned int zoneID, unsigned int slba, unsigned int numOfSlice);
 
-int ZoneReadCheck(unsigned int slba, unsigned int nlb);
+int ZoneReadCheck(unsigned int zoneID, unsigned int slba, unsigned int nlb);
 
 unsigned int GetZoneDataBuf(unsigned int zoneID, int offset);
 
@@ -23,6 +23,8 @@ void ZNS_ReqTransSliceToLowLevel(unsigned int reqSlotTag);
 
 void ZNS_EvictDataBufEntry(unsigned int zoneID, unsigned int originReqSlotTag);
 
-void ZNS_DataReadFromNand(unsigned int originReqSlotTag);
+void ZNS_DataReadFromNand(unsigned int zoneID, unsigned int originReqSlotTag);
+
+unsigned int ZNS_AddrTrans(unsigned int zoneID, unsigned int lsa);
 
 #endif

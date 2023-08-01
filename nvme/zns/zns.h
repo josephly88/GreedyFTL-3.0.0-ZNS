@@ -42,8 +42,10 @@
 #define SLICE_PER_STRIPE									(NUM_OF_DIE_PER_ZONE)
 #define DATA_BUFFER_STRIPE_PER_ZONE							2
 #define DATA_BUFFER_ENTRY_COUNT_PER_ZONE					(SLICE_PER_STRIPE * DATA_BUFFER_STRIPE_PER_ZONE)
+#define ZNS_DATA_BUFFER_ENTRY_START							(AVAILABLE_DATA_BUFFER_ENTRY_COUNT)
+
 #define OPEN_ZONE_DATA_BUFFER_ENTRY_COUNT					(MAXIMUM_OPEN_ZONE_COUNT * DATA_BUFFER_ENTRY_COUNT_PER_ZONE)
-#define ACTIVE_ZONE_READ_BUFFER_ENTRY_COUNT					(MAXIMUM_OPEN_ZONE_COUNT * SLICE_PER_STRIPE)
+#define ACTIVE_ZONE_READ_BUFFER_ENTRY_COUNT					(MAXIMUM_ACTIVE_ZONE_COUNT * SLICE_PER_STRIPE)
 
 #define ZONE_BLOCK_GROUP_START								(ZNS_LBA_START_NVME_BLOCK / NVME_BLOCKS_PER_ZONE)
 
@@ -58,20 +60,32 @@
 #define OUTER_ZONE_BLOCK_ROW_BITS							((int)log2(8192/NUM_OF_BLOCK_PER_ZONE))
 
 // Temporarily Zone Size: 2GB
-typedef struct _ZNS_ADDR
+typedef struct _ZNS_LogicalSliceAddr
 {
     union{
         unsigned int dword;
         struct{
-			// A Block Layer is 128 MB if spaning all the channels x die (15-bits)
-			unsigned int PAGE_COLUMN_ID     			:PAGE_COLUMN_BITS;
-            unsigned int PAGE_ROW_ID        			:PAGE_ROW_BITS;
-            //unsigned int DIE_GROUP_ID       			:DIE_GROUP_BITS;
-			//unsigned int INNER_BLOCK_GROUP_ROW_ID		:INNER_ZONE_BLOCK_ROW_BITS;
-            unsigned int OUTER_BLOCK_GROUP_ROW_ID 		:OUTER_ZONE_BLOCK_ROW_BITS; 
+			unsigned int PAGE_COLUMN_ID     			: PAGE_COLUMN_BITS;
+            unsigned int PAGE_ROW_ID        			: PAGE_ROW_BITS;
+            //unsigned int DIE_GROUP_ID       			: DIE_GROUP_BITS;
+			unsigned int INNER_BLOCK_ROW_ID				: INNER_ZONE_BLOCK_ROW_BITS;
+            unsigned int ZONE_ID				 		: OUTER_ZONE_BLOCK_ROW_BITS; 
         };
     };
-}ZNS_ADDR;
+}ZNS_LogicalSliceAddr;
+
+typedef struct _ZNS_VirtualSliceAddr
+{
+    union{
+        unsigned int dword;
+        struct{
+			unsigned int chNo			     			: 3;
+            unsigned int wayNo		        			: 3;
+            unsigned int pageNo					 		: 7;
+			unsigned int blockNo						: 13; 
+        };
+    };
+}ZNS_VirtualSliceAddr;
 
 typedef struct _ZONE_REG
 {
@@ -91,7 +105,7 @@ typedef struct _ZONE_MAP
     unsigned int Num_Empty_Zone;
     unsigned int Num_Read_Zone;
     unsigned int Num_Off_Zone;
-    ZONE_REG zoneReg[MAXIMUM_OPEN_ZONE_COUNT];
+    ZONE_REG zoneReg[MAXIMUM_ACTIVE_ZONE_COUNT];
 	unsigned int readBufPtr[64];
 } ZONE_MAP, *P_ZONE_MAP;
 
@@ -103,10 +117,8 @@ typedef struct _VALID_BLOCK_GROUP_FIFO
 	int Rear;	// Tail of FIFO
 } VALID_BLOCK_GROUP_FIFO, *P_VALID_BLOCK_GROUP_FIFO;
 
-#define Lba2ZoneId(lba)										((lba / NVME_BLOCKS_PER_ZONE) - ZONE_BLOCK_GROUP_START)
-#define Lsa2ZoneId(logicalSliceAddr)						((logicalSliceAddr / SLICE_PER_ZONE) - ZONE_BLOCK_GROUP_START)
-
-#define Lsa2Lva(logicalSliceAddr)							(logicalSliceAddr)
+#define Lba2ZoneId(lba)										((lba - ZNS_LBA_START_NVME_BLOCK) / NVME_BLOCKS_PER_ZONE)
+#define Lsa2ZoneId(logicalSliceAddr)						(logicalSliceAddr / SLICE_PER_ZONE)
 
 /*-------------------------------------------------------------
 		Section : NVMe ZNS Command Specification
