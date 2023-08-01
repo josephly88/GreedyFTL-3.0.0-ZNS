@@ -21,7 +21,9 @@ P_VALID_BLOCK_GROUP_FIFO validBlockGroupFifoPtr;
 int BadBlockTuples[] = {4052, 4057};
 
 void InitZNS()
-{
+{	
+	parameterCheck();
+
 	// PRINTING
 	xil_printf("\r\n");
 	xil_printf("ZNS Initialization\r\n");
@@ -72,6 +74,14 @@ void InitZNS()
 	for(i = 0; i < SLICE_PER_STRIPE; i++){
 		zoneMapPtr->readBufPtr[i] = 0;
 	}
+}
+
+void parameterCheck(){
+	if(NUM_OF_BLOCK_PER_ZONE < 0 || NUM_OF_BLOCK_PER_ZONE > 8192 || 8192 % NUM_OF_BLOCK_PER_ZONE != 0)
+		assert(!"[Error] NUM_OF_BLOCK_PER_ZONE must be a factor of 8192 [Error]");
+
+	if(NUM_OF_DIE_PER_ZONE < 0 || NUM_OF_DIE_PER_ZONE > 64 || 64 % NUM_OF_DIE_PER_ZONE != 0)
+		assert(!"[Error] NUM_OF_DIE_PER_ZONE must be a factor of 64 [Error]");
 }
 
 void eliminateBadBlockGroups(){

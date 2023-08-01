@@ -5,6 +5,8 @@
 
 void InitZNS();
 
+void parameterCheck();
+
 void eliminateBadBlockGroups();
 
 void shuffleValidBlockGroups();
