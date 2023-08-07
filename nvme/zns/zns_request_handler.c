@@ -44,7 +44,8 @@ void InitZNS()
 	validBlockGroupFifoPtr->Valid_Count = 0;
 
 	eliminateBadBlockGroups();
-	shuffleValidBlockGroups();	
+	if(BLOCK_SHUFFLE_ENABLE)
+		shuffleValidBlockGroups();		
 
 	validBlockGroupFifoPtr->Head = 0;
 	validBlockGroupFifoPtr->Rear = validBlockGroupFifoPtr->Valid_Count - 1;
@@ -418,8 +419,15 @@ unsigned int ZNS_AddrTrans(unsigned int zoneID, unsigned int lsa){
 	vsaPtr = (ZNS_VirtualSliceAddr*) &vsa;
 
 	dieNo = ((BLOCK_GROUP_ID % BLOCK_GROUP_IN_COLUMN) * NUM_OF_DIE_PER_ZONE) + (lsa % NUM_OF_DIE_PER_ZONE);
-	vsaPtr->chNo = Vdie2PchTranslation(dieNo);
-	vsaPtr->wayNo = Vdie2PwayTranslation(dieNo);
+	if(CHANNEL_DIE_ORIENTED == 0){
+		vsaPtr->chNo = Vdie2PchTranslation(dieNo);
+		vsaPtr->wayNo = Vdie2PwayTranslation(dieNo);
+	}
+	else{
+		vsaPtr->chNo = Vdie2PwayTranslation(dieNo);
+		vsaPtr->wayNo = Vdie2PchTranslation(dieNo);
+	}
+	
 
 	vsaPtr->pageNo = (lsa / NUM_OF_DIE_PER_ZONE) % (SLICES_PER_BLOCK);
 

@@ -12,11 +12,18 @@
 // Row Group: 1-8192 (Must be a factor of 8192 (USER_BLOCKS_PER_DIE). E.g., 8192 / 1024 = 8 that has no remainder)
 #define NUM_OF_BLOCK_PER_ZONE								16			// 1 Block : 2MB
 // Column Group: 1-64 (Must be a factor of 64 (USER_DIES). E.g., 64 / 4 = 16 that has no remainder)
-#define NUM_OF_DIE_PER_ZONE									64		
+#define NUM_OF_DIE_PER_ZONE									32		
 
-#define MAXIMUM_OPEN_ZONE_COUNT                  			1
-#define MAXIMUM_ACTIVE_ZONE_COUNT                  			1
+#define MAXIMUM_OPEN_ZONE_COUNT                  			2
+#define MAXIMUM_ACTIVE_ZONE_COUNT                  			2
 #define ZNS_LBA_START_NVME_BLOCK							0x100000	// 0x100000 * 0x1000 (NVMe Block Size: 4KB) = 4GB
+
+// 0-Channel Oriented, 1-Die Oriented
+#define CHANNEL_DIE_ORIENTED								1
+// 0-Disable, 1-Enable
+#define BLOCK_SHUFFLE_ENABLE								0		
+
+#define DATA_BUFFER_STRIPE_PER_ZONE							2		
 
 /*-------------------------------------------------------------
 		Section : Output Parameters
@@ -40,7 +47,6 @@
 
 /* Zone Data Buffer Range */
 #define SLICE_PER_STRIPE									(NUM_OF_DIE_PER_ZONE)
-#define DATA_BUFFER_STRIPE_PER_ZONE							2
 #define DATA_BUFFER_ENTRY_COUNT_PER_ZONE					(SLICE_PER_STRIPE * DATA_BUFFER_STRIPE_PER_ZONE)
 #define ZNS_DATA_BUFFER_ENTRY_START							(AVAILABLE_DATA_BUFFER_ENTRY_COUNT)
 
