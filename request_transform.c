@@ -101,30 +101,32 @@ void ReqTransNvmeToSlice(unsigned int cmdSlotTag, unsigned int startLba, unsigne
 
 			xil_printf("Before: tempLsa = %d\r\n", tempLsa);
 
-			unsigned int zoneID = Lba2ZoneId(startLba);
-			if(zoneID < 0 || zoneID >= MAXIMUM_ACTIVE_ZONE_COUNT){
-				xil_printf("Zone ID Error: %d\r\n", zoneID);
+			unsigned int zoneRegID = Lba2ZoneRegId(startLba);
+			if(zoneRegID < 0 || zoneRegID >= MAXIMUM_ACTIVE_ZONE_COUNT){
+				xil_printf("Zone Reg ID Error: %d\r\n", zoneRegID);
 				return;
 			}
 
+			int zoneID;
 			if(cmdCode == IO_NVM_WRITE){
-				if(ZoneWriteCheck(zoneID, startLba, nlb + 1) == 0)
-					return;
+				zoneID = ZoneWriteCheck(zoneRegID, startLba, nlb + 1);
+				reqCode = REQ_CODE_ZONE_WRITE;
 			}
-			if(cmdCode == IO_NVM_READ){
-				if(ZoneReadCheck(zoneID, startLba, nlb + 1) == 0)
-					return;
+			else if(cmdCode == IO_NVM_READ){
+				zoneID = ZoneReadCheck(zoneRegID, startLba, nlb + 1);
+				reqCode = REQ_CODE_ZONE_READ;
+			}
+			else{
+				assert(!"[WARNING] Not supported command code [WARNING]");
+				return;
+			}
+
+			if(zoneID < 0){
+				return;
 			}
 
 			P_ZNS_tempLsa->ZONE_ID = zoneID;	
 			xil_printf("After: tempLsa = %d, ZoneID = %d\r\n", tempLsa, zoneID);	
-
-			if(reqCode == REQ_CODE_WRITE)
-				reqCode = REQ_CODE_ZONE_WRITE;
-			else if(reqCode == REQ_CODE_READ)
-				reqCode = REQ_CODE_ZONE_READ;
-			else
-				assert(!"[WARNING] Not supported command code [WARNING]");
 		}		
 	}
 

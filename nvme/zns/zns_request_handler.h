@@ -11,9 +11,17 @@ void eliminateBadBlockGroups();
 
 void shuffleValidBlockGroups();
 
-int ZoneWriteCheck(unsigned int zoneID, unsigned int slba, unsigned int numOfSlice);
+unsigned int validBlockGroupFifo_Dequeue();
 
-int ZoneReadCheck(unsigned int zoneID, unsigned int slba, unsigned int nlb);
+void validBlockGroupFifo_Enqueue(unsigned int element);
+
+unsigned int zoneIDFifo_Dequeue();
+
+void zoneIDFifo_Enqueue(unsigned int element);
+
+int ZoneWriteCheck(unsigned int zoneRegID, unsigned int slba, unsigned int numOfSlice);
+
+int ZoneReadCheck(unsigned int zoneRegID, unsigned int slba, unsigned int nlb);
 
 unsigned int GetZoneDataBuf(unsigned int zoneID, int offset);
 

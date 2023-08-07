@@ -69,6 +69,7 @@
 #define ZNS_MANAGEMENT_START_ADDR       0x00400000
 // for map tables
 #define ZONE_MAP_ADDR                   0x00500000
+#define ZONE_ID_FIFO_ADDR               0x0ECFF000
 #define VALID_BLOCK_GROUP_FIFO_ADDR     0x0ED00000
 
 #define ZNS_MANAGEMENT_END_ADDR			0x0FFFFFFF

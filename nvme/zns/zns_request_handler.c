@@ -15,6 +15,7 @@
 
 P_ZONE_MAP zoneMapPtr;
 P_VALID_BLOCK_GROUP_FIFO validBlockGroupFifoPtr;
+P_ZONE_ID_FIFO zoneIDFifoPtr;
 
 // Bad block tuples (Assume the tuples are sorted and not overlapped)
 // {4052, 4057} means virtual blocks 4052 - 4057 are bad blocks
@@ -63,13 +64,21 @@ void InitZNS()
 	// Initialize Zone Metadata
 	int i;
     for (i = 0; i < MAXIMUM_ACTIVE_ZONE_COUNT; i++){
-        zoneMapPtr->zoneReg[i].Zone_ID = i;
+        zoneMapPtr->zoneReg[i].Zone_ID = 0;
         zoneMapPtr->zoneReg[i].Zone_State = EMPTY;
         zoneMapPtr->zoneReg[i].SLBA = ZNS_LBA_START_NVME_BLOCK + i * NVME_BLOCKS_PER_ZONE;
         zoneMapPtr->zoneReg[i].Write_Pointer = zoneMapPtr->zoneReg[i].SLBA;
         zoneMapPtr->zoneReg[i].Buffer_Idx = 0;
 		zoneMapPtr->zoneReg[i].Phy_Block_Group_ID = 0;
     }
+
+	zoneIDFifoPtr = (P_ZONE_ID_FIFO) ZONE_ID_FIFO_ADDR;
+	for(i = 0; i < MAXIMUM_OPEN_ZONE_COUNT; i++){
+		zoneIDFifoPtr->FIFO_LIST[i] = i;
+		zoneIDFifoPtr->ZONE_ID2REG_ID[i] = -1;
+	}
+	zoneIDFifoPtr->Head = 0;
+	zoneIDFifoPtr->Rear = MAXIMUM_OPEN_ZONE_COUNT - 1;
 
 	// Initialize Read Buffer
 	for(i = 0; i < SLICE_PER_STRIPE; i++){
@@ -176,68 +185,82 @@ void validBlockGroupFifo_Enqueue(unsigned int element){
 	validBlockGroupFifoPtr->FIFO_LIST[validBlockGroupFifoPtr->Rear] = element;
 }
 
-int ZoneWriteCheck(unsigned int zoneID, unsigned int slba, unsigned int nlb){
+unsigned int zoneIDFifo_Dequeue(){
+	int element = zoneIDFifoPtr->FIFO_LIST[zoneIDFifoPtr->Head];
+	zoneIDFifoPtr->Head = (zoneIDFifoPtr->Head + 1) % MAXIMUM_OPEN_ZONE_COUNT;
+
+	return element;
+}
+
+void zoneIDFifo_Enqueue(unsigned int element){
+	zoneIDFifoPtr->Rear = (zoneIDFifoPtr->Rear + 1) % MAXIMUM_OPEN_ZONE_COUNT;
+	zoneIDFifoPtr->FIFO_LIST[zoneIDFifoPtr->Rear] = element;
+}
+
+int ZoneWriteCheck(unsigned int zoneRegID, unsigned int slba, unsigned int nlb){
 	ZONE_REG zoneReg;
-	zoneReg = zoneMapPtr->zoneReg[zoneID];
+	zoneReg = zoneMapPtr->zoneReg[zoneRegID];
 
 	// Zone State Check
 	if(zoneReg.Zone_State != IMPLICITLY_OPENED && zoneReg.Zone_State != EXPLICITLY_OPENED
 	 && zoneReg.Zone_State != CLOSED && zoneReg.Zone_State != EMPTY){
 		xil_printf("Zone State Error: %d\r\n", zoneReg.Zone_State);
-		return 0;
+		return -1;
 	}
 	
 	// Sequential Write Check
 	if(zoneReg.Write_Pointer != slba){
 		xil_printf("Sequential Write Error: WP: %x SLBA: %x\r\n", zoneReg.Write_Pointer, slba);
-		return 0;
+		return -1;
 	}
 
 	// Out-of-Bound Check
 	if(zoneReg.Write_Pointer + nlb > zoneReg.SLBA + NVME_BLOCKS_PER_ZONE){
 		xil_printf("Out-of-Bound Error: WP: %x SLBA: %x nlb+1 : %d\r\n", zoneReg.Write_Pointer, slba, nlb);
-		return 0;
+		return -1;
 	}
 
-	if(zoneMapPtr->zoneReg[zoneID].Zone_State == EMPTY){
+	if(zoneMapPtr->zoneReg[zoneRegID].Zone_State == EMPTY){
 		if(zoneMapPtr->Num_Open_Zone >= MAXIMUM_OPEN_ZONE_COUNT){
 			xil_printf("Maximum Open Zone Count Reached: %d\r\n", MAXIMUM_OPEN_ZONE_COUNT);
-			return 0;
+			return -1;
 		}
-		zoneMapPtr->zoneReg[zoneID].Zone_State = IMPLICITLY_OPENED;
+		zoneMapPtr->zoneReg[zoneRegID].Zone_State = IMPLICITLY_OPENED;
 		zoneMapPtr->Num_Open_Zone++;
 		zoneMapPtr->Num_Empty_Zone--;
 
-		zoneMapPtr->zoneReg[zoneID].Phy_Block_Group_ID = validBlockGroupFifo_Dequeue();
-		xil_printf("Zone %d (Block Group %d) is implicitly opened\r\n", zoneID, zoneMapPtr->zoneReg[zoneID].Phy_Block_Group_ID);
+		zoneMapPtr->zoneReg[zoneRegID].Zone_ID = zoneIDFifo_Dequeue();
+		zoneIDFifoPtr->ZONE_ID2REG_ID[zoneMapPtr->zoneReg[zoneRegID].Zone_ID] = zoneRegID;
+		zoneMapPtr->zoneReg[zoneRegID].Phy_Block_Group_ID = validBlockGroupFifo_Dequeue();
+		xil_printf("Zone %d (Block Group %d) is implicitly opened\r\n", zoneMapPtr->zoneReg[zoneRegID].Zone_ID, zoneMapPtr->zoneReg[zoneRegID].Phy_Block_Group_ID);
 	}
 
 	// Increment the write pointer
-	zoneMapPtr->zoneReg[zoneID].Write_Pointer += nlb;
-	if(zoneMapPtr->zoneReg[zoneID].Write_Pointer >= zoneReg.SLBA + NVME_BLOCKS_PER_ZONE){
-		zoneMapPtr->zoneReg[zoneID].Zone_State = FULL;
+	zoneMapPtr->zoneReg[zoneRegID].Write_Pointer += nlb;
+	if(zoneMapPtr->zoneReg[zoneRegID].Write_Pointer >= zoneReg.SLBA + NVME_BLOCKS_PER_ZONE){
+		zoneMapPtr->zoneReg[zoneRegID].Zone_State = FULL;
 	}
 
-    return 1;
+    return zoneMapPtr->zoneReg[zoneRegID].Zone_ID;
 }
 
-int ZoneReadCheck(unsigned int zoneID, unsigned int slba, unsigned int nlb){
+int ZoneReadCheck(unsigned int zoneRegID, unsigned int slba, unsigned int nlb){
 	ZONE_REG zoneReg;
-	zoneReg = zoneMapPtr->zoneReg[zoneID];
+	zoneReg = zoneMapPtr->zoneReg[zoneRegID];
 
 	// Zone State Check
 	if(zoneReg.Zone_State == EMPTY || zoneReg.Zone_State == OFFLINE){
 		xil_printf("Zone State Error: %d\r\n", zoneReg.Zone_State);
-		return 0;
+		return -1;
 	}
 
 	// Out-of-Bound Check
 	if(slba + nlb > zoneReg.Write_Pointer){
 		xil_printf("Out-of-Bound Error: WP: %x SLBA: %x nlb+1 : %d\r\n", zoneReg.Write_Pointer, slba, nlb);
-		return 0;
+		return -1;
 	}
 
-	return 1;
+	return zoneMapPtr->zoneReg[zoneRegID].Zone_ID;
 }
 
 unsigned int GetZoneDataBuf(unsigned int zoneID, int offset){
@@ -408,11 +431,12 @@ void ZNS_DataReadFromNand(unsigned int zoneID, unsigned int originReqSlotTag)
 }
 
 unsigned int ZNS_AddrTrans(unsigned int zoneID, unsigned int lsa){
-	unsigned int BLOCK_GROUP_ID, vsa, dieNo, innerBlockNo, outerBlockNo;
+	unsigned int BLOCK_GROUP_ID, vsa, dieNo, innerBlockNo, outerBlockNo, zoneRegID;
 	ZNS_VirtualSliceAddr* vsaPtr;
 
 	ZONE_REG zoneReg;
-	zoneReg = zoneMapPtr->zoneReg[zoneID];
+	zoneRegID = zoneIDFifoPtr->ZONE_ID2REG_ID[zoneID];
+	zoneReg = zoneMapPtr->zoneReg[zoneRegID];
 
 	BLOCK_GROUP_ID = zoneReg.Phy_Block_Group_ID;
 	vsa = lsa;	
@@ -426,8 +450,7 @@ unsigned int ZNS_AddrTrans(unsigned int zoneID, unsigned int lsa){
 	else{
 		vsaPtr->chNo = Vdie2PwayTranslation(dieNo);
 		vsaPtr->wayNo = Vdie2PchTranslation(dieNo);
-	}
-	
+	}	
 
 	vsaPtr->pageNo = (lsa / NUM_OF_DIE_PER_ZONE) % (SLICES_PER_BLOCK);
 
