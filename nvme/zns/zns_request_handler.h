@@ -7,6 +7,8 @@ void InitZNS();
 
 void parameterCheck();
 
+void resetZoneReg(int ZoneRegID);
+
 void eliminateBadBlockGroups();
 
 void shuffleValidBlockGroups();

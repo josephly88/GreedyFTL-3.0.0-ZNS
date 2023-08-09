@@ -54,27 +54,27 @@
 #include "request_transform.h"
 #include "garbage_collection.h"
 
-#define DRAM_START_ADDR					0x00100000
+#define DRAM_START_ADDR					        0x00100000
 
-#define MEMORY_SEGMENTS_START_ADDR		DRAM_START_ADDR
-#define MEMORY_SEGMENTS_END_ADDR		0x001FFFFF
+#define MEMORY_SEGMENTS_START_ADDR		        DRAM_START_ADDR
+#define MEMORY_SEGMENTS_END_ADDR		        0x001FFFFF
 
-#define NVME_MANAGEMENT_START_ADDR		0x00200000
-#define NVME_MANAGEMENT_END_ADDR		0x002FFFFF
+#define NVME_MANAGEMENT_START_ADDR		        0x00200000
+#define NVME_MANAGEMENT_END_ADDR		        0x002FFFFF
 
-#define RESERVED0_START_ADDR			0x00300000
-#define RESERVED0_END_ADDR              0x003FFFFF
+#define RESERVED0_START_ADDR			        0x00300000
+#define RESERVED0_END_ADDR                      0x003FFFFF
 
 //for ZNS map tables
-#define ZNS_MANAGEMENT_START_ADDR       0x00400000
+#define ZNS_MANAGEMENT_START_ADDR               0x00400000
 // for map tables
-#define ZONE_MAP_ADDR                   0x00500000
-#define ZONE_ID_FIFO_ADDR               0x0ECFF000
-#define VALID_BLOCK_GROUP_FIFO_ADDR     0x0ED00000
+#define ZONE_MAP_ADDR                           0x00500000
+#define ZONE_BUFFER_ID_FIFO_ADDR                0x0ECFF000
+#define VALID_BLOCK_GROUP_FIFO_ADDR             0x0ED00000
 
-#define ZNS_MANAGEMENT_END_ADDR			0x0FFFFFFF
+#define ZNS_MANAGEMENT_END_ADDR			        0x0FFFFFFF
 
-#define FTL_MANAGEMENT_START_ADDR		0x10000000
+#define FTL_MANAGEMENT_START_ADDR		        0x10000000
 // Uncached & Unbuffered
 //for data buffer
 #define DATA_BUFFER_BASE_ADDR 					0x10000000

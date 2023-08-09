@@ -15,7 +15,7 @@
 
 P_ZONE_MAP zoneMapPtr;
 P_VALID_BLOCK_GROUP_FIFO validBlockGroupFifoPtr;
-P_ZONE_ID_FIFO zoneIDFifoPtr;
+P_ZONE_BUFFER_ID_FIFO zoneBufferIDFifoPtr;
 
 // Bad block tuples (Assume the tuples are sorted and not overlapped)
 // {4052, 4057} means virtual blocks 4052 - 4057 are bad blocks
@@ -72,13 +72,13 @@ void InitZNS()
 		zoneMapPtr->zoneReg[i].Phy_Block_Group_ID = 0;
     }
 
-	zoneIDFifoPtr = (P_ZONE_ID_FIFO) ZONE_ID_FIFO_ADDR;
+	zoneBufferIDFifoPtr = (P_ZONE_BUFFER_ID_FIFO) ZONE_BUFFER_ID_FIFO_ADDR;
 	for(i = 0; i < MAXIMUM_OPEN_ZONE_COUNT; i++){
-		zoneIDFifoPtr->FIFO_LIST[i] = i;
-		zoneIDFifoPtr->ZONE_ID2REG_ID[i] = -1;
+		zoneBufferIDFifoPtr->FIFO_LIST[i] = i;
+		zoneBufferIDFifoPtr->ZoneBufferID2RegID[i] = -1;
 	}
-	zoneIDFifoPtr->Head = 0;
-	zoneIDFifoPtr->Rear = MAXIMUM_OPEN_ZONE_COUNT - 1;
+	zoneBufferIDFifoPtr->Head = 0;
+	zoneBufferIDFifoPtr->Rear = MAXIMUM_OPEN_ZONE_COUNT - 1;
 
 	// Initialize Read Buffer
 	for(i = 0; i < SLICE_PER_STRIPE; i++){
@@ -92,6 +92,16 @@ void parameterCheck(){
 
 	if(NUM_OF_DIE_PER_ZONE < 0 || NUM_OF_DIE_PER_ZONE > 64 || 64 % NUM_OF_DIE_PER_ZONE != 0)
 		assert(!"[Error] NUM_OF_DIE_PER_ZONE must be a factor of 64 [Error]");
+}
+
+void resetZoneReg(int ZoneRegID){
+	ZONE_REG zoneReg = zoneMapPtr->zoneReg[ZoneRegID];
+	zoneReg.Zone_ID = 0;
+	zoneReg.Zone_State = EMPTY;
+	zoneReg.SLBA = ZNS_LBA_START_NVME_BLOCK + ZoneRegID * NVME_BLOCKS_PER_ZONE;
+	zoneReg.Write_Pointer = zoneReg.SLBA;
+	zoneReg.Buffer_Idx = 0;
+	zoneReg.Phy_Block_Group_ID = 0;
 }
 
 void eliminateBadBlockGroups(){
@@ -186,15 +196,15 @@ void validBlockGroupFifo_Enqueue(unsigned int element){
 }
 
 unsigned int zoneIDFifo_Dequeue(){
-	int element = zoneIDFifoPtr->FIFO_LIST[zoneIDFifoPtr->Head];
-	zoneIDFifoPtr->Head = (zoneIDFifoPtr->Head + 1) % MAXIMUM_OPEN_ZONE_COUNT;
+	int element = zoneBufferIDFifoPtr->FIFO_LIST[zoneBufferIDFifoPtr->Head];
+	zoneBufferIDFifoPtr->Head = (zoneBufferIDFifoPtr->Head + 1) % MAXIMUM_OPEN_ZONE_COUNT;
 
 	return element;
 }
 
 void zoneIDFifo_Enqueue(unsigned int element){
-	zoneIDFifoPtr->Rear = (zoneIDFifoPtr->Rear + 1) % MAXIMUM_OPEN_ZONE_COUNT;
-	zoneIDFifoPtr->FIFO_LIST[zoneIDFifoPtr->Rear] = element;
+	zoneBufferIDFifoPtr->Rear = (zoneBufferIDFifoPtr->Rear + 1) % MAXIMUM_OPEN_ZONE_COUNT;
+	zoneBufferIDFifoPtr->FIFO_LIST[zoneBufferIDFifoPtr->Rear] = element;
 }
 
 int ZoneWriteCheck(unsigned int zoneRegID, unsigned int slba, unsigned int nlb){
@@ -230,7 +240,7 @@ int ZoneWriteCheck(unsigned int zoneRegID, unsigned int slba, unsigned int nlb){
 		zoneMapPtr->Num_Empty_Zone--;
 
 		zoneMapPtr->zoneReg[zoneRegID].Zone_ID = zoneIDFifo_Dequeue();
-		zoneIDFifoPtr->ZONE_ID2REG_ID[zoneMapPtr->zoneReg[zoneRegID].Zone_ID] = zoneRegID;
+		zoneBufferIDFifoPtr->ZoneBufferID2RegID[zoneMapPtr->zoneReg[zoneRegID].Zone_ID] = zoneRegID;
 		zoneMapPtr->zoneReg[zoneRegID].Phy_Block_Group_ID = validBlockGroupFifo_Dequeue();
 		xil_printf("Zone %d (Block Group %d) is implicitly opened\r\n", zoneMapPtr->zoneReg[zoneRegID].Zone_ID, zoneMapPtr->zoneReg[zoneRegID].Phy_Block_Group_ID);
 	}
@@ -372,7 +382,7 @@ void ZNS_ReqTransSliceToLowLevel(unsigned int reqSlotTag){
 void ZNS_EvictDataBufEntry(unsigned int zoneID, unsigned int originReqSlotTag){
 	unsigned int reqSlotTag, virtualSliceAddr, dataBufEntry;
 
-	// Circular Buffer
+	// Ping-Pong Buffer, Flash write the next row buffer if it is dirty
 	dataBufEntry = ZNS_DATA_BUFFER_ENTRY_START + (zoneID * DATA_BUFFER_ENTRY_COUNT_PER_ZONE) + ((zoneMapPtr->zoneReg[zoneID].Buffer_Idx + SLICE_PER_STRIPE) % DATA_BUFFER_ENTRY_COUNT_PER_ZONE);
 	if(dataBufMapPtr->dataBuf[dataBufEntry].dirty == DATA_BUF_DIRTY)
 	{
@@ -435,7 +445,7 @@ unsigned int ZNS_AddrTrans(unsigned int zoneID, unsigned int lsa){
 	ZNS_VirtualSliceAddr* vsaPtr;
 
 	ZONE_REG zoneReg;
-	zoneRegID = zoneIDFifoPtr->ZONE_ID2REG_ID[zoneID];
+	zoneRegID = zoneBufferIDFifoPtr->ZoneBufferID2RegID[zoneID];
 	zoneReg = zoneMapPtr->zoneReg[zoneRegID];
 
 	BLOCK_GROUP_ID = zoneReg.Phy_Block_Group_ID;

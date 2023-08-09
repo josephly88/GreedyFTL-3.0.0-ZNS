@@ -123,13 +123,13 @@ typedef struct _VALID_BLOCK_GROUP_FIFO
 	int Rear;	// Tail of FIFO
 } VALID_BLOCK_GROUP_FIFO, *P_VALID_BLOCK_GROUP_FIFO;
 
-typedef struct _ZONE_ID_FIFO
+typedef struct _ZONE_BUFFER_ID_FIFO
 {
 	unsigned int FIFO_LIST[MAXIMUM_OPEN_ZONE_COUNT];
-	int ZONE_ID2REG_ID[MAXIMUM_OPEN_ZONE_COUNT];
+	int ZoneBufferID2RegID[MAXIMUM_OPEN_ZONE_COUNT];
 	int Head;	// Head of FIFO
 	int Rear;	// Tail of FIFO
-} ZONE_ID_FIFO, *P_ZONE_ID_FIFO;
+} ZONE_BUFFER_ID_FIFO, *P_ZONE_BUFFER_ID_FIFO;
 
 #define Lba2ZoneRegId(lba)									((lba - ZNS_LBA_START_NVME_BLOCK) / NVME_BLOCKS_PER_ZONE)
 #define Lsa2ZoneId(logicalSliceAddr)						(logicalSliceAddr / SLICE_PER_ZONE)
