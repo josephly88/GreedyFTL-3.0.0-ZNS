@@ -64,12 +64,7 @@ void InitZNS()
 	// Initialize Zone Metadata
 	int i;
     for (i = 0; i < MAXIMUM_ACTIVE_ZONE_COUNT; i++){
-        zoneMapPtr->zoneReg[i].Zone_ID = 0;
-        zoneMapPtr->zoneReg[i].Zone_State = EMPTY;
-        zoneMapPtr->zoneReg[i].SLBA = ZNS_LBA_START_NVME_BLOCK + i * NVME_BLOCKS_PER_ZONE;
-        zoneMapPtr->zoneReg[i].Write_Pointer = zoneMapPtr->zoneReg[i].SLBA;
-        zoneMapPtr->zoneReg[i].Buffer_Idx = 0;
-		zoneMapPtr->zoneReg[i].Phy_Block_Group_ID = 0;
+        resetZoneReg(i);
     }
 
 	zoneBufferIDFifoPtr = (P_ZONE_BUFFER_ID_FIFO) ZONE_BUFFER_ID_FIFO_ADDR;
@@ -95,13 +90,12 @@ void parameterCheck(){
 }
 
 void resetZoneReg(int ZoneRegID){
-	ZONE_REG zoneReg = zoneMapPtr->zoneReg[ZoneRegID];
-	zoneReg.Zone_ID = 0;
-	zoneReg.Zone_State = EMPTY;
-	zoneReg.SLBA = ZNS_LBA_START_NVME_BLOCK + ZoneRegID * NVME_BLOCKS_PER_ZONE;
-	zoneReg.Write_Pointer = zoneReg.SLBA;
-	zoneReg.Buffer_Idx = 0;
-	zoneReg.Phy_Block_Group_ID = 0;
+	zoneMapPtr->zoneReg[ZoneRegID].Zone_ID = 0;
+	zoneMapPtr->zoneReg[ZoneRegID].Zone_State = EMPTY;
+	zoneMapPtr->zoneReg[ZoneRegID].SLBA = ZNS_LBA_START_NVME_BLOCK + ZoneRegID * NVME_BLOCKS_PER_ZONE;
+	zoneMapPtr->zoneReg[ZoneRegID].Write_Pointer = zoneMapPtr->zoneReg[ZoneRegID].SLBA;
+	zoneMapPtr->zoneReg[ZoneRegID].Buffer_Idx = 0;
+	zoneMapPtr->zoneReg[ZoneRegID].Phy_Block_Group_ID = 0;
 }
 
 void eliminateBadBlockGroups(){
@@ -464,7 +458,7 @@ unsigned int ZNS_AddrTrans(unsigned int zoneID, unsigned int lsa){
 
 	vsaPtr->pageNo = (lsa / NUM_OF_DIE_PER_ZONE) % (SLICES_PER_BLOCK);
 
-	innerBlockNo = (lsa / (NUM_OF_DIE_PER_ZONE * SLICES_PER_BLOCK)) % (BLOCK_PER_BLOCK_GROUP);
+	innerBlockNo = (lsa / (NUM_OF_DIE_PER_ZONE * SLICES_PER_BLOCK)) % (NUM_OF_BLOCK_PER_ZONE);
 	outerBlockNo = BLOCK_GROUP_ID / BLOCK_GROUP_IN_COLUMN;
 
 	vsaPtr->blockNo = outerBlockNo * NUM_OF_BLOCK_PER_ZONE + innerBlockNo;

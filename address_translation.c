@@ -815,7 +815,11 @@ void EraseBlock(unsigned int dieNo, unsigned int blockNo)
 
 	int rowNo = blockNo / NUM_OF_BLOCK_PER_ZONE;
 	int colNo = dieNo / NUM_OF_DIE_PER_ZONE;
+	if(CHANNEL_DIE_ORIENTED == 1)      // Swap ch & way to get the real column No.
+		colNo = (dieNo / 8 + ((dieNo % 8) * 8)) / NUM_OF_DIE_PER_ZONE;
 	int GroupNo = rowNo * BLOCK_GROUP_IN_COLUMN + colNo;
+
+	xil_printf("EraseBlock: blockNo = %d, dieNo = %d\r\n", blockNo, dieNo);
 
 	if(ZNS_IO_COMMAND_SET == 0 || GroupNo < ZONE_BLOCK_GROUP_START)
 		PutToFbList(dieNo, blockNo);
