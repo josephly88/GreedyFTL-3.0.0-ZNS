@@ -10,18 +10,18 @@
 #define ZNS_IO_COMMAND_SET									1			// 0-Normal, 1-ZNS
 
 // Row Group: 1-8192 (Must be a factor of 8192 (USER_BLOCKS_PER_DIE). E.g., 8192 / 1024 = 8 that has no remainder)
-#define NUM_OF_BLOCK_PER_ZONE								16			// 1 Block : 2MB
+#define NUM_OF_BLOCK_PER_ZONE								8			// 1 Block : 2MB
 // Column Group: 1-64 (Must be a factor of 64 (USER_DIES). E.g., 64 / 4 = 16 that has no remainder)
-#define NUM_OF_DIE_PER_ZONE									32		
+#define NUM_OF_DIE_PER_ZONE									64		
 
-#define MAXIMUM_OPEN_ZONE_COUNT                  			2
-#define MAXIMUM_ACTIVE_ZONE_COUNT                  			2
-#define ZNS_LBA_START_NVME_BLOCK							0x100000	// 0x100000 * 0x1000 (NVMe Block Size: 4KB) = 4GB
+#define MAXIMUM_OPEN_ZONE_COUNT                  			5
+#define MAXIMUM_ACTIVE_ZONE_COUNT                  			5
+#define ZNS_LBA_START_NVME_BLOCK							0x800000	// 0x800000 * 0x1000 (NVMe Block Size: 4KB) = 16GB
 
 // 0-Channel Oriented, 1-Die Oriented
 #define CHANNEL_DIE_ORIENTED								0
 // 0-Disable, 1-Enable
-#define BLOCK_SHUFFLE_ENABLE								1		
+#define BLOCK_SHUFFLE_ENABLE								0		
 
 #define DATA_BUFFER_STRIPE_PER_ZONE							2		
 
@@ -58,28 +58,6 @@
 /*-------------------------------------------------------------
 		Section : Strcut for ZNS Metadata
 -------------------------------------------------------------*/
-
-#define PAGE_COLUMN_BITS									((int)log2(NUM_OF_DIE_PER_ZONE))
-#define PAGE_ROW_BITS										((int)log2(128))
-#define DIE_GROUP_BITS										((int)log2((64/NUM_OF_DIE_PER_ZONE)))
-#define INNER_ZONE_BLOCK_ROW_BITS							((int)log2(NUM_OF_BLOCK_PER_ZONE))
-#define OUTER_ZONE_BLOCK_ROW_BITS							((int)log2(8192/NUM_OF_BLOCK_PER_ZONE))
-
-// Temporarily Zone Size: 2GB
-typedef struct _ZNS_LogicalSliceAddr
-{
-    union{
-        unsigned int dword;
-        struct{
-			unsigned int PAGE_COLUMN_ID     			: PAGE_COLUMN_BITS;
-            unsigned int PAGE_ROW_ID        			: PAGE_ROW_BITS;
-            //unsigned int DIE_GROUP_ID       			: DIE_GROUP_BITS;
-			unsigned int INNER_BLOCK_ROW_ID				: INNER_ZONE_BLOCK_ROW_BITS;
-            unsigned int ZONE_ID				 		: OUTER_ZONE_BLOCK_ROW_BITS; 
-        };
-    };
-}ZNS_LogicalSliceAddr;
-
 typedef struct _ZNS_VirtualSliceAddr
 {
     union{
