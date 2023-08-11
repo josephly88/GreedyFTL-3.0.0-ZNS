@@ -38,11 +38,7 @@ void InitZNS()
 	validBlockGroupFifoPtr->Valid_Count = 0;
 
 	eliminateBadBlockGroups();
-	if(BLOCK_SHUFFLE_ENABLE)
-		shuffleValidBlockGroups();		
-
-	validBlockGroupFifoPtr->Head = 0;
-	validBlockGroupFifoPtr->Rear = validBlockGroupFifoPtr->Valid_Count - 1;
+	shuffleValidBlockGroups();		
 	
 	zoneMapPtr = (P_ZONE_MAP) ZONE_MAP_ADDR;
 
@@ -120,29 +116,45 @@ void eliminateBadBlockGroups(){
 
 	validcnt = 0;
 	for(bgIdx = 0; bgIdx < BLOCK_GROUP_PER_SSD; bgIdx++){
-		if(badblockgroup[bgIdx] == 0){
+		if(badblockgroup[bgIdx] == 0 && bgIdx >= ZONE_BLOCK_GROUP_START){
 			validBlockGroupFifoPtr->FIFO_LIST[validcnt] = bgIdx;
 			validcnt++;
 		}
 		else{
-			xil_printf("Bad Block Group %d is skipped!\r\n", bgIdx);
+			if(badblockgroup[bgIdx] == 1)
+				xil_printf("Bad Block Group %d is skipped!\r\n", bgIdx);
 		}
 	}
 	validBlockGroupFifoPtr->Valid_Count = validcnt;
 }
 
 void shuffleValidBlockGroups(){
-	// Shuffle the validBlockShuffleList
-	int i;
-	XTime t;
-	XTime_GetTime(&t);
-	srand(t);
-	for(i = validBlockGroupFifoPtr->Valid_Count-1; i > 0; i--){
-		int r = rand() % (i+1);
-		int swap = validBlockGroupFifoPtr->FIFO_LIST[r];
-		validBlockGroupFifoPtr->FIFO_LIST[r] = validBlockGroupFifoPtr->FIFO_LIST[i];
-		validBlockGroupFifoPtr->FIFO_LIST[i] = swap;
+	if(BLOCK_SHUFFLE_ENABLE){
+		// Shuffle the validBlockShuffleList
+		int i;
+		XTime t;
+		XTime_GetTime(&t);
+		srand(t);
+		for(i = validBlockGroupFifoPtr->Valid_Count-1; i > 0; i--){
+			int r = rand() % (i+1);
+			int swap = validBlockGroupFifoPtr->FIFO_LIST[r];
+			validBlockGroupFifoPtr->FIFO_LIST[r] = validBlockGroupFifoPtr->FIFO_LIST[i];
+			validBlockGroupFifoPtr->FIFO_LIST[i] = swap;
+		}
+
+		validBlockGroupFifoPtr->Head = 0;
+		validBlockGroupFifoPtr->Rear = validBlockGroupFifoPtr->Valid_Count - 1;
 	}
+	else{
+		XTime t;
+		XTime_GetTime(&t);
+		srand(t);
+		int r = rand() % validBlockGroupFifoPtr->Valid_Count;
+
+		validBlockGroupFifoPtr->Head = r;
+		validBlockGroupFifoPtr->Rear = (r + validBlockGroupFifoPtr->Valid_Count - 1) % validBlockGroupFifoPtr->Valid_Count;
+	}
+
 }
 
 unsigned int validBlockGroupFifo_Dequeue(){
