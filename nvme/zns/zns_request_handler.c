@@ -32,13 +32,6 @@ void InitZNS()
 	xil_printf("- BLOCK_GROUP_PER_SSD: %d\r\n", BLOCK_GROUP_PER_SSD);
 	xil_printf("- ZONE_BLOCK_GROUP_START: %d\r\n", ZONE_BLOCK_GROUP_START);
 	xil_printf("\r\n");
-	xil_printf("Address Translation\r\n");
-	xil_printf("- PAGE_COLUMN_BITS: %d\r\n", PAGE_COLUMN_BITS);
-	xil_printf("- PAGE_ROW_BITS: %d\r\n", PAGE_ROW_BITS);
-	xil_printf("- DIE_GROUP_BITS: %d\r\n", DIE_GROUP_BITS);
-	xil_printf("- INNER_ZONE_BLOCK_ROW_BITS: %d\r\n", INNER_ZONE_BLOCK_ROW_BITS);
-	xil_printf("- OUTER_ZONE_BLOCK_ROW_BITS: %d\r\n", OUTER_ZONE_BLOCK_ROW_BITS);
-	xil_printf("\r\n");
 
 	
 	validBlockGroupFifoPtr = (P_VALID_BLOCK_GROUP_FIFO) VALID_BLOCK_GROUP_FIFO_ADDR;
@@ -99,68 +92,43 @@ void resetZoneReg(int ZoneRegID){
 }
 
 void eliminateBadBlockGroups(){
-	int i, badcnt, badDone;
+	int baditv, bgIdx, validcnt;
 	
 	int BadBlockTuplesSize = (sizeof(BadBlockTuples)/sizeof(int));
 	if(BadBlockTuplesSize % 2 == 1)
 		assert(!"[Error] BadBlockTuples: The length must be even number [Error]");
 
-	badcnt = 0;
-	badDone = 0;
+	int badblockgroup[BLOCK_GROUP_PER_SSD];
+	for(bgIdx = 0; bgIdx < BLOCK_GROUP_PER_SSD; bgIdx++)
+		badblockgroup[bgIdx] = 0;
 
-	// Skip the bad block tuples that are smaller than the start of the zone
-	while(BadBlockTuples[badcnt+1] < ZONE_BLOCK_GROUP_START){
-		badcnt += 2;
-		if(badcnt >= BadBlockTuplesSize){ 	// Bad Block Tuples are exhausted
-			badDone = 1;
-			break;
+	for(baditv = 0; baditv < BadBlockTuplesSize; baditv += 2){
+		int badblk;
+		for(badblk = BadBlockTuples[baditv]; badblk <= BadBlockTuples[baditv+1]; badblk++){
+			// Skip the bad block tuples that are smaller than the start of the zone
+			if(badblk < ZONE_BLOCK_GROUP_START)
+				continue;
+			// Calculate the block group that bad block belongs to
+			int BG_row = (badblk / 64) / NUM_OF_BLOCK_PER_ZONE;
+			int BG_column = (badblk % 64) / NUM_OF_DIE_PER_ZONE;
+			int BG = BG_row * (64/NUM_OF_DIE_PER_ZONE) + BG_column;
+
+			badblockgroup[BG] = 1;
+			//xil_printf("Bad Block %d is found in Block Group %d\r\n", badblk, BG);
 		}
 	}
 
-	// Prepare an array of valid block groups
-	for(i = ZONE_BLOCK_GROUP_START; i < BLOCK_GROUP_PER_SSD; i++){
-
-		while(BadBlockTuples[badcnt] < i*BLOCK_PER_BLOCK_GROUP){
-			badcnt++;
-			if(badcnt >= BadBlockTuplesSize){ 	// Bad Block Tuples are exhausted
-				badDone = 1;
-				break;
-			}
+	validcnt = 0;
+	for(bgIdx = 0; bgIdx < BLOCK_GROUP_PER_SSD; bgIdx++){
+		if(badblockgroup[bgIdx] == 0){
+			validBlockGroupFifoPtr->FIFO_LIST[validcnt] = bgIdx;
+			validcnt++;
 		}
-
-		if(badDone == 0){
-			// Start of the intevals
-			if(badcnt % 2 == 0){
-				if((BadBlockTuples[badcnt] >= i*BLOCK_PER_BLOCK_GROUP) && BadBlockTuples[badcnt] < ((i+1)*BLOCK_PER_BLOCK_GROUP)){
-					xil_printf("Block Group - %d is skipped\r\n", i);
-					if(BadBlockTuples[badcnt+1] < ((i+1)*BLOCK_PER_BLOCK_GROUP)){
-						badcnt += 2;
-						if(badcnt >= BadBlockTuplesSize)	// Bad Block Tuples are exhausted
-							badDone = 1;
-					}
-					else{
-						badcnt += 1;
-					}
-					continue;
-				}
-			}
-			// End of the intevals
-			else{
-				if((BadBlockTuples[badcnt] >= i*BLOCK_PER_BLOCK_GROUP)){
-					xil_printf("Block Group - %d is skipped\r\n", i);
-					if(BadBlockTuples[badcnt] < ((i+1)*BLOCK_PER_BLOCK_GROUP)){
-						badcnt += 1;
-						if(badcnt >= BadBlockTuplesSize)	// Bad Block Tuples are exhausted
-							badDone = 1;
-					}
-					continue;
-				}
-			}
+		else{
+			xil_printf("Bad Block Group %d is skipped!\r\n", bgIdx);
 		}
-
-		validBlockGroupFifoPtr->FIFO_LIST[validBlockGroupFifoPtr->Valid_Count] = i;
-		validBlockGroupFifoPtr->Valid_Count++;
 	}
+	validBlockGroupFifoPtr->Valid_Count = validcnt;
 }
 
 void shuffleValidBlockGroups(){
@@ -463,7 +431,7 @@ unsigned int ZNS_AddrTrans(unsigned int zoneID, unsigned int lsa){
 
 	vsaPtr->blockNo = outerBlockNo * NUM_OF_BLOCK_PER_ZONE + innerBlockNo;
 
-	xil_printf("ZNS_AddrTrans: lsa: %x, zoneID: %d, blockNo: %d, pageNo: %d, wayNo: %d, chNo: %d\r\n", lsa, zoneID, vsaPtr->blockNo, vsaPtr->pageNo, vsaPtr->wayNo, vsaPtr->chNo);
+	//xil_printf("ZNS_AddrTrans: lsa: %x, zoneID: %d, blockNo: %d, pageNo: %d, wayNo: %d, chNo: %d\r\n", lsa, zoneID, vsaPtr->blockNo, vsaPtr->pageNo, vsaPtr->wayNo, vsaPtr->chNo);
 
 	return vsa;
 }
