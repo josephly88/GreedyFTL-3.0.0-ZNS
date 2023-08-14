@@ -154,8 +154,8 @@ void resetZone(unsigned int zoneRegId){
 
     zoneIDFifo_Enqueue(zoneReg.Zone_ID);
 
-    for(BufferIdx = 0; BufferIdx < DATA_BUFFER_ENTRY_COUNT_PER_ZONE; BufferIdx++){
-        unsigned int dataBufEntry = ZNS_DATA_BUFFER_ENTRY_START + (zoneReg.Zone_ID * DATA_BUFFER_ENTRY_COUNT_PER_ZONE) + BufferIdx;
+    for(BufferIdx = 0; BufferIdx < DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE; BufferIdx++){
+        unsigned int dataBufEntry = ZNS_DATA_BUFFER_ENTRY_START + (zoneReg.Zone_ID * DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE) + BufferIdx;
         dataBufMapPtr->dataBuf[dataBufEntry].dirty = DATA_BUF_CLEAN;
     }
 

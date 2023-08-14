@@ -97,7 +97,7 @@ void ReqTransNvmeToSlice(unsigned int cmdSlotTag, unsigned int startLba, unsigne
 
 	if(ZNS_IO_COMMAND_SET){
 		if(startLba >= ZNS_LBA_START_NVME_BLOCK && startLba < ZNS_LBA_END_NVME_BLOCK){
-			xil_printf("Before: tempLsa = %d\r\n", tempLsa);
+			//xil_printf("Before: tempLsa = %d\r\n", tempLsa);
 
 			unsigned int zoneRegID = Lba2ZoneRegId(startLba);
 			if(zoneRegID < 0 || zoneRegID >= MAXIMUM_ACTIVE_ZONE_COUNT){
@@ -123,8 +123,8 @@ void ReqTransNvmeToSlice(unsigned int cmdSlotTag, unsigned int startLba, unsigne
 				return;
 			}
 
-			tempLsa = (zoneID * NVME_BLOCKS_PER_ZONE) + (tempLsa % NVME_BLOCKS_PER_ZONE);
-			xil_printf("After: tempLsa = %d, ZoneID = %d\r\n", tempLsa, zoneID);	
+			tempLsa = (zoneID * SLICE_PER_ZONE) + (tempLsa % SLICE_PER_ZONE);
+			//xil_printf("After: tempLsa = %d, ZoneID = %d\r\n", tempLsa, zoneID);	
 		}		
 	}
 

@@ -216,7 +216,7 @@ int ZoneWriteCheck(unsigned int zoneRegID, unsigned int slba, unsigned int nlb){
 		zoneMapPtr->zoneReg[zoneRegID].Zone_ID = zoneIDFifo_Dequeue();
 		zoneBufferIDFifoPtr->ZoneBufferID2RegID[zoneMapPtr->zoneReg[zoneRegID].Zone_ID] = zoneRegID;
 		zoneMapPtr->zoneReg[zoneRegID].Phy_Block_Group_ID = validBlockGroupFifo_Dequeue();
-		xil_printf("Zone %d (Block Group %d) is implicitly opened\r\n", zoneMapPtr->zoneReg[zoneRegID].Zone_ID, zoneMapPtr->zoneReg[zoneRegID].Phy_Block_Group_ID);
+		//xil_printf("Zone %d (Block Group %d) is implicitly opened\r\n", zoneMapPtr->zoneReg[zoneRegID].Zone_ID, zoneMapPtr->zoneReg[zoneRegID].Phy_Block_Group_ID);
 	}
 
 	// Increment the write pointer
@@ -248,12 +248,12 @@ int ZoneReadCheck(unsigned int zoneRegID, unsigned int slba, unsigned int nlb){
 }
 
 unsigned int GetZoneDataBuf(unsigned int zoneID, int offset){
-	unsigned int off_idx = (zoneMapPtr->zoneReg[zoneID].Buffer_Idx + offset + DATA_BUFFER_ENTRY_COUNT_PER_ZONE) % DATA_BUFFER_ENTRY_COUNT_PER_ZONE;
-	return ZNS_DATA_BUFFER_ENTRY_START + (zoneID * DATA_BUFFER_ENTRY_COUNT_PER_ZONE) + off_idx;
+	unsigned int off_idx = (zoneMapPtr->zoneReg[zoneID].Buffer_Idx + offset + DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE) % DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE;
+	return ZNS_DATA_BUFFER_ENTRY_START + (zoneID * DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE) + off_idx;
 }
 
 void incrementDataBufPointer(unsigned int zoneID){
-	zoneMapPtr->zoneReg[zoneID].Buffer_Idx = (zoneMapPtr->zoneReg[zoneID].Buffer_Idx + 1) % DATA_BUFFER_ENTRY_COUNT_PER_ZONE;
+	zoneMapPtr->zoneReg[zoneID].Buffer_Idx = (zoneMapPtr->zoneReg[zoneID].Buffer_Idx + 1) % DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE;
 }
 
 unsigned int checkZoneWriteDataBuf(unsigned int reqSlotTag, unsigned int zoneID){
@@ -271,7 +271,7 @@ unsigned int checkZoneWriteDataBuf(unsigned int reqSlotTag, unsigned int zoneID)
 		}
 	}
 	else{
-		unsigned base = AVAILABLE_DATA_BUFFER_ENTRY_COUNT + MAXIMUM_OPEN_ZONE_COUNT * DATA_BUFFER_ENTRY_COUNT_PER_ZONE;
+		unsigned base = AVAILABLE_DATA_BUFFER_ENTRY_COUNT + MAXIMUM_OPEN_ZONE_COUNT * DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE;
 		unsigned key = reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr % SLICE_PER_STRIPE;
 		int i;
 		for(i = 0; i < MAXIMUM_OPEN_ZONE_COUNT; i++){
@@ -325,7 +325,7 @@ void ZNS_ReqTransSliceToLowLevel(unsigned int reqSlotTag){
 		
 		dataBufEntry = checkZoneWriteDataBuf(reqSlotTag, zoneID);
 		if(dataBufEntry == DATA_BUF_FAIL){
-			unsigned base = AVAILABLE_DATA_BUFFER_ENTRY_COUNT + MAXIMUM_OPEN_ZONE_COUNT * DATA_BUFFER_ENTRY_COUNT_PER_ZONE;
+			unsigned base = AVAILABLE_DATA_BUFFER_ENTRY_COUNT + MAXIMUM_OPEN_ZONE_COUNT * DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE;
 			unsigned key = reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr % SLICE_PER_STRIPE;
 			dataBufEntry = base + zoneMapPtr->readBufPtr[key] * SLICE_PER_STRIPE + key;
 			zoneMapPtr->readBufPtr[key] = (zoneMapPtr->readBufPtr[key] + 1) % MAXIMUM_OPEN_ZONE_COUNT;
@@ -357,10 +357,10 @@ void ZNS_EvictDataBufEntry(unsigned int zoneID, unsigned int originReqSlotTag){
 	unsigned int reqSlotTag, virtualSliceAddr, dataBufEntry;
 
 	// Ping-Pong Buffer, Flash write the next row buffer if it is dirty
-	dataBufEntry = ZNS_DATA_BUFFER_ENTRY_START + (zoneID * DATA_BUFFER_ENTRY_COUNT_PER_ZONE) + ((zoneMapPtr->zoneReg[zoneID].Buffer_Idx + SLICE_PER_STRIPE) % DATA_BUFFER_ENTRY_COUNT_PER_ZONE);
+	dataBufEntry = ZNS_DATA_BUFFER_ENTRY_START + (zoneID * DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE) + ((zoneMapPtr->zoneReg[zoneID].Buffer_Idx + SLICE_PER_STRIPE) % DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE);
 	if(dataBufMapPtr->dataBuf[dataBufEntry].dirty == DATA_BUF_DIRTY)
 	{
-		xil_printf("Evict DataBufEntry : %d, SliceAddr : 0x%x\r\n", dataBufEntry, dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr);
+		//xil_printf("Evict DataBufEntry : %d, SliceAddr : 0x%x\r\n", dataBufEntry, dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr);
 		reqSlotTag = GetFromFreeReqQ();
 		virtualSliceAddr = ZNS_AddrTrans(zoneID, dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr);
 
@@ -443,7 +443,7 @@ unsigned int ZNS_AddrTrans(unsigned int zoneID, unsigned int lsa){
 
 	vsaPtr->blockNo = outerBlockNo * NUM_OF_BLOCK_PER_ZONE + innerBlockNo;
 
-	//xil_printf("ZNS_AddrTrans: lsa: %x, zoneID: %d, blockNo: %d, pageNo: %d, wayNo: %d, chNo: %d\r\n", lsa, zoneID, vsaPtr->blockNo, vsaPtr->pageNo, vsaPtr->wayNo, vsaPtr->chNo);
+	//xil_printf("ZNS_AddrTrans: lsa: %x, zoneBufferID: %d, blockNo: %d, pageNo: %d, wayNo: %d, chNo: %d\r\n", lsa, zoneID, vsaPtr->blockNo, vsaPtr->pageNo, vsaPtr->wayNo, vsaPtr->chNo);
 
 	return vsa;
 }
