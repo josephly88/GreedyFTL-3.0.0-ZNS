@@ -102,13 +102,13 @@ void handle_zns_reset_zone(IO_ZNS_ZONE_MANGAEMENT_SEND_DW13 mgmtSendInfo, unsign
     P_ZONE_MAP zoneMapPtr = (P_ZONE_MAP) ZONE_MAP_ADDR;
 
     if(mgmtSendInfo.SELECT_ALL == 1){
-        int ZoneRegIdx;
-        for(ZoneRegIdx = 0; ZoneRegIdx < MAXIMUM_OPEN_ZONE_COUNT; ZoneRegIdx++){
-            ZONE_REG* zoneReg = &zoneMapPtr->zoneReg[ZoneRegIdx];
+        int ZoneID;
+        for(ZoneID = 0; ZoneID < MAXIMUM_OPEN_ZONE_COUNT; ZoneID++){
+            ZONE_REG* zoneReg = &zoneMapPtr->zoneReg[ZoneID];
             unsigned char cur_state = zoneReg->Zone_State;
 
             if(cur_state == IMPLICITLY_OPENED || cur_state == EXPLICITLY_OPENED || cur_state == CLOSED || cur_state == FULL){
-                resetZone(ZoneRegIdx);
+                resetZone(ZoneID);
                 
                 if(cur_state == IMPLICITLY_OPENED || cur_state == EXPLICITLY_OPENED)
                     zoneMapPtr->Num_Open_Zone--;
@@ -116,21 +116,22 @@ void handle_zns_reset_zone(IO_ZNS_ZONE_MANGAEMENT_SEND_DW13 mgmtSendInfo, unsign
                     zoneMapPtr->Num_Close_Zone--;
                 else if(cur_state == FULL)
                     zoneMapPtr->Num_Full_Zone--;
+
                 zoneMapPtr->Num_Empty_Zone++;
             }                
         }
     }
     else{
-        unsigned int ZoneRegIdx = (SLBA - ZNS_LBA_START_NVME_BLOCK) / NVME_BLOCKS_PER_ZONE;
+        unsigned int ZoneID = Lba2ZoneId(SLBA);
 
-        if(ZoneRegIdx >= MAXIMUM_ACTIVE_ZONE_COUNT){
+        if(ZoneID >= MAXIMUM_ACTIVE_ZONE_COUNT){
             xil_printf("SLBA out of range: 0x%X\r\n", SLBA);
             return;
         }
 
-        unsigned char cur_state = zoneMapPtr->zoneReg[ZoneRegIdx].Zone_State;
+        unsigned char cur_state = zoneMapPtr->zoneReg[ZoneID].Zone_State;
         if(cur_state == IMPLICITLY_OPENED || cur_state == EXPLICITLY_OPENED || cur_state == CLOSED || cur_state == FULL){
-            resetZone(ZoneRegIdx);
+            resetZone(ZoneID);
 
             if(cur_state == IMPLICITLY_OPENED || cur_state == EXPLICITLY_OPENED)
                 zoneMapPtr->Num_Open_Zone--;
@@ -138,6 +139,7 @@ void handle_zns_reset_zone(IO_ZNS_ZONE_MANGAEMENT_SEND_DW13 mgmtSendInfo, unsign
                 zoneMapPtr->Num_Close_Zone--;
             else if(cur_state == FULL)
                 zoneMapPtr->Num_Full_Zone--;
+
             zoneMapPtr->Num_Empty_Zone++;
         }
         else if(cur_state == READ_ONLY || cur_state == OFFLINE){
@@ -147,15 +149,15 @@ void handle_zns_reset_zone(IO_ZNS_ZONE_MANGAEMENT_SEND_DW13 mgmtSendInfo, unsign
     }
 }
 
-void resetZone(unsigned int zoneRegId){
+void resetZone(unsigned int zoneId){
     P_ZONE_MAP zoneMapPtr = (P_ZONE_MAP) ZONE_MAP_ADDR;
     int BufferIdx, DieIdx;
-    ZONE_REG zoneReg = zoneMapPtr->zoneReg[zoneRegId];
+    ZONE_REG zoneReg = zoneMapPtr->zoneReg[zoneId];
+    int zoneBufferID = zoneReg.Buffer_ID;
 
-    zoneIDFifo_Enqueue(zoneReg.Zone_ID);
-
+    // Clear all write buffers
     for(BufferIdx = 0; BufferIdx < DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE; BufferIdx++){
-        unsigned int dataBufEntry = ZNS_DATA_BUFFER_ENTRY_START + (zoneReg.Zone_ID * DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE) + BufferIdx;
+        unsigned int dataBufEntry = ZNS_DATA_BUFFER_ENTRY_START + (zoneBufferID * DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE) + BufferIdx;
         dataBufMapPtr->dataBuf[dataBufEntry].dirty = DATA_BUF_CLEAN;
     }
 
@@ -164,6 +166,7 @@ void resetZone(unsigned int zoneRegId){
     //xil_printf("Catch a zone reset command - zoneRegId : %d\r\n", zoneRegId);
     //xil_printf("Reset Size in NVMe Block: %d\r\n", WrittenSize);
 
+    // Erase all written blocks in the zone
     unsigned int innerBlockNo = 0;
     while(WrittenSize > 0){
         for(DieIdx = 0; DieIdx < NUM_OF_DIE_PER_ZONE; DieIdx++){
@@ -179,7 +182,10 @@ void resetZone(unsigned int zoneRegId){
         innerBlockNo++;
     }
 
-    resetZoneReg(zoneRegId);
+    resetWriteBufferReg(zoneBufferID);
+    bufferIDFifo_Enqueue(zoneReg.Buffer_ID);
+
+    resetZoneReg(zoneId);
 }
 
 void handle_zns_offline_zone(IO_ZNS_ZONE_MANGAEMENT_SEND_DW13 mgmtSendInfo, unsigned long long SLBA){

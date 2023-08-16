@@ -60,6 +60,10 @@
 /*-------------------------------------------------------------
 		Section : Strcut for ZNS Metadata
 -------------------------------------------------------------*/
+
+#define Lba2ZoneId(lba)										((lba - ZNS_LBA_START_NVME_BLOCK) / NVME_BLOCKS_PER_ZONE)
+#define Lsa2ZoneId(logicalSliceAddr)						(logicalSliceAddr / SLICE_PER_ZONE)
+
 typedef struct _ZNS_VirtualSliceAddr
 {
     union{
@@ -75,12 +79,11 @@ typedef struct _ZNS_VirtualSliceAddr
 
 typedef struct _ZONE_REG
 {
-    unsigned int Zone_ID;
     unsigned char Zone_State;
 	unsigned int SLBA;
     unsigned int Write_Pointer;
-	unsigned int Buffer_Idx;
-	unsigned int Phy_Block_Group_ID;
+	int Buffer_ID;
+	int Phy_Block_Group_ID;
 } ZONE_REG;
 
 typedef struct _ZONE_MAP
@@ -103,16 +106,19 @@ typedef struct _VALID_BLOCK_GROUP_FIFO
 	int Rear;	// Tail of FIFO
 } VALID_BLOCK_GROUP_FIFO, *P_VALID_BLOCK_GROUP_FIFO;
 
-typedef struct _ZONE_BUFFER_ID_FIFO
+typedef struct _ZONE_WRITE_BUF_REG
+{
+	int ZoneID;
+	int curWriteIdx;
+} ZONE_WRITE_BUF_REG;
+
+typedef struct _ZONE_WRITE_BUFFER_MAP
 {
 	unsigned int FIFO_LIST[MAXIMUM_OPEN_ZONE_COUNT];
-	int ZoneBufferID2RegID[MAXIMUM_OPEN_ZONE_COUNT];
+	ZONE_WRITE_BUF_REG zoneWriteBufReg[MAXIMUM_OPEN_ZONE_COUNT];
 	int Head;	// Head of FIFO
 	int Rear;	// Tail of FIFO
-} ZONE_BUFFER_ID_FIFO, *P_ZONE_BUFFER_ID_FIFO;
-
-#define Lba2ZoneRegId(lba)									((lba - ZNS_LBA_START_NVME_BLOCK) / NVME_BLOCKS_PER_ZONE)
-#define Lsa2ZoneId(logicalSliceAddr)						(logicalSliceAddr / SLICE_PER_ZONE)
+} ZONE_WRITE_BUFFER_MAP, *P_ZONE_WRITE_BUFFER_MAP;
 
 /*-------------------------------------------------------------
 		Section : NVMe ZNS Command Specification

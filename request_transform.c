@@ -99,27 +99,24 @@ void ReqTransNvmeToSlice(unsigned int cmdSlotTag, unsigned int startLba, unsigne
 		if(startLba >= ZNS_LBA_START_NVME_BLOCK && startLba < ZNS_LBA_END_NVME_BLOCK){
 			//xil_printf("Before: tempLsa = %d\r\n", tempLsa);
 
-			unsigned int zoneRegID = Lba2ZoneRegId(startLba);
-			if(zoneRegID < 0 || zoneRegID >= MAXIMUM_ACTIVE_ZONE_COUNT){
-				xil_printf("Zone Reg ID Error: %d\r\n", zoneRegID);
+			unsigned int zoneID = Lba2ZoneId(startLba);
+			if(zoneID < 0 || zoneID >= MAXIMUM_ACTIVE_ZONE_COUNT){
+				xil_printf("Zone Reg ID Error: %d\r\n", zoneID);
 				return;
 			}
 
-			int zoneID;
 			if(cmdCode == IO_NVM_WRITE){
-				zoneID = ZoneWriteCheck(zoneRegID, startLba, nlb + 1);
+				if(ZoneWriteCheck(zoneID, startLba, nlb + 1) < 0)
+					return;
 				reqCode = REQ_CODE_ZONE_WRITE;
 			}
 			else if(cmdCode == IO_NVM_READ){
-				zoneID = ZoneReadCheck(zoneRegID, startLba, nlb + 1);
+				if(ZoneReadCheck(zoneID, startLba, nlb + 1) < 0)
+					return;
 				reqCode = REQ_CODE_ZONE_READ;
 			}
 			else{
 				assert(!"[WARNING] Not supported command code [WARNING]");
-				return;
-			}
-
-			if(zoneID < 0){
 				return;
 			}
 

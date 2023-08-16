@@ -9,6 +9,8 @@ void parameterCheck();
 
 void resetZoneReg(int ZoneRegID);
 
+void resetWriteBufferReg(int BufferID);
+
 void eliminateBadBlockGroups();
 
 void shuffleValidBlockGroups();
@@ -17,19 +19,25 @@ unsigned int validBlockGroupFifo_Dequeue();
 
 void validBlockGroupFifo_Enqueue(unsigned int element);
 
-unsigned int zoneIDFifo_Dequeue();
+unsigned int bufferIDFifo_Dequeue();
 
-void zoneIDFifo_Enqueue(unsigned int element);
+void bufferIDFifo_Enqueue(unsigned int element);
 
-int ZoneWriteCheck(unsigned int zoneRegID, unsigned int slba, unsigned int numOfSlice);
+int ZoneWriteCheck(unsigned int zoneID, unsigned int slba, unsigned int numOfSlice);
 
-int ZoneReadCheck(unsigned int zoneRegID, unsigned int slba, unsigned int nlb);
+int ZoneReadCheck(unsigned int zoneID, unsigned int slba, unsigned int nlb);
 
 unsigned int GetZoneDataBuf(unsigned int zoneID, int offset);
 
 void incrementDataBufPointer(unsigned int zoneID);
 
 unsigned int checkZoneWriteDataBuf(unsigned int reqSlotTag, unsigned int zoneID);
+
+unsigned int checkZoneReadDataBuf(unsigned int reqSlotTag);
+
+unsigned int AllocateZoneDataBuf();
+
+void SelectiveGetFromZoneDataBufHashList(unsigned int bufEntry);
 
 void ZNS_ReqTransSliceToLowLevel(unsigned int reqSlotTag);
 
