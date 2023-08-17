@@ -177,10 +177,13 @@ void resetZone(unsigned int zoneId){
             blockNo = zoneReg.Phy_Block_Group_ID / BLOCK_GROUP_IN_COLUMN * NUM_OF_BLOCK_PER_ZONE + innerBlockNo;
             EraseBlock(dieNo, blockNo);
         }
+        
+        SyncAllLowLevelReqDone();
 
         WrittenSize -= (NVME_BLOCKS_PER_SLICE * SLICES_PER_BLOCK * NUM_OF_DIE_PER_ZONE);
         innerBlockNo++;
     }
+
 
     resetWriteBufferReg(zoneBufferID);
     bufferIDFifo_Enqueue(zoneReg.Buffer_ID);

@@ -505,7 +505,7 @@ void ZNS_EvictDataBufEntry(unsigned int zoneID, unsigned int originReqSlotTag){
 	{
 		//xil_printf("Evict DataBufEntry : %d, SliceAddr : 0x%x\r\n", dataBufEntry, dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr);
 		reqSlotTag = GetFromFreeReqQ();
-		virtualSliceAddr = ZNS_AddrTrans(zoneID, dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr);
+		virtualSliceAddr = ZNS_AddrTransWrite(zoneID, dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr);
 
 		reqPoolPtr->reqPool[reqSlotTag].reqType = REQ_TYPE_NAND;
 		reqPoolPtr->reqPool[reqSlotTag].reqCode = REQ_CODE_WRITE;
@@ -532,7 +532,7 @@ void ZNS_DataReadFromNand(unsigned int zoneID, unsigned int originReqSlotTag)
 {
 	unsigned int reqSlotTag, virtualSliceAddr;
 
-	virtualSliceAddr = ZNS_AddrTrans(zoneID, reqPoolPtr->reqPool[originReqSlotTag].logicalSliceAddr);
+	virtualSliceAddr = ZNS_AddrTransRead(zoneID, reqPoolPtr->reqPool[originReqSlotTag].logicalSliceAddr);
 
 	if(virtualSliceAddr != VSA_FAIL)
 	{
@@ -557,15 +557,15 @@ void ZNS_DataReadFromNand(unsigned int zoneID, unsigned int originReqSlotTag)
 	}
 }
 
-unsigned int ZNS_AddrTrans(unsigned int zoneID, unsigned int lsa){
-	unsigned int BLOCK_GROUP_ID, vsa, dieNo, innerBlockNo, outerBlockNo;
+unsigned int ZNS_AddrTransWrite(unsigned int zoneID, unsigned int lsa){
+	unsigned int BLOCK_GROUP_ID, virtualSliceAddr, dieNo, innerBlockNo, outerBlockNo;
 	ZNS_VirtualSliceAddr* vsaPtr;
 
 	ZONE_REG zoneReg= zoneMapPtr->zoneReg[zoneID];
 
 	BLOCK_GROUP_ID = zoneReg.Phy_Block_Group_ID;
-	vsa = lsa;	
-	vsaPtr = (ZNS_VirtualSliceAddr*) &vsa;
+	virtualSliceAddr = lsa;	
+	vsaPtr = (ZNS_VirtualSliceAddr*) &virtualSliceAddr;
 
 	dieNo = ((BLOCK_GROUP_ID % BLOCK_GROUP_IN_COLUMN) * NUM_OF_DIE_PER_ZONE) + (lsa % NUM_OF_DIE_PER_ZONE);
 	if(CHANNEL_DIE_ORIENTED == 0){
@@ -586,5 +586,39 @@ unsigned int ZNS_AddrTrans(unsigned int zoneID, unsigned int lsa){
 
 	//xil_printf("ZNS_AddrTrans: lsa: %x, zoneID: %d, BufferID: %d, blockNo: %d, pageNo: %d, wayNo: %d, chNo: %d\r\n", lsa, zoneID, zoneMapPtr->zoneReg[zoneID].Buffer_ID, vsaPtr->blockNo, vsaPtr->pageNo, vsaPtr->wayNo, vsaPtr->chNo);
 
-	return vsa;
+	virtualBlockMapPtr->block[dieNo][vsaPtr->blockNo].currentPage++;
+
+	return virtualSliceAddr;
+}
+
+unsigned int ZNS_AddrTransRead(unsigned int zoneID, unsigned int lsa){
+	unsigned int BLOCK_GROUP_ID, virtualSliceAddr, dieNo, innerBlockNo, outerBlockNo;
+	ZNS_VirtualSliceAddr* vsaPtr;
+
+	ZONE_REG zoneReg= zoneMapPtr->zoneReg[zoneID];
+
+	BLOCK_GROUP_ID = zoneReg.Phy_Block_Group_ID;
+	virtualSliceAddr = lsa;	
+	vsaPtr = (ZNS_VirtualSliceAddr*) &virtualSliceAddr;
+
+	dieNo = ((BLOCK_GROUP_ID % BLOCK_GROUP_IN_COLUMN) * NUM_OF_DIE_PER_ZONE) + (lsa % NUM_OF_DIE_PER_ZONE);
+	if(CHANNEL_DIE_ORIENTED == 0){
+		vsaPtr->chNo = Vdie2PchTranslation(dieNo);
+		vsaPtr->wayNo = Vdie2PwayTranslation(dieNo);
+	}
+	else{
+		vsaPtr->chNo = Vdie2PwayTranslation(dieNo);
+		vsaPtr->wayNo = Vdie2PchTranslation(dieNo);
+	}	
+
+	vsaPtr->pageNo = (lsa / NUM_OF_DIE_PER_ZONE) % (SLICES_PER_BLOCK);
+
+	innerBlockNo = (lsa / (NUM_OF_DIE_PER_ZONE * SLICES_PER_BLOCK)) % (NUM_OF_BLOCK_PER_ZONE);
+	outerBlockNo = BLOCK_GROUP_ID / BLOCK_GROUP_IN_COLUMN;
+
+	vsaPtr->blockNo = outerBlockNo * NUM_OF_BLOCK_PER_ZONE + innerBlockNo;
+
+	//xil_printf("ZNS_AddrTrans: lsa: %x, zoneID: %d, BufferID: %d, blockNo: %d, pageNo: %d, wayNo: %d, chNo: %d\r\n", lsa, zoneID, zoneMapPtr->zoneReg[zoneID].Buffer_ID, vsaPtr->blockNo, vsaPtr->pageNo, vsaPtr->wayNo, vsaPtr->chNo);
+
+	return virtualSliceAddr;
 }

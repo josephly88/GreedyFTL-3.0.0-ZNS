@@ -45,6 +45,8 @@ void ZNS_EvictDataBufEntry(unsigned int zoneID, unsigned int originReqSlotTag);
 
 void ZNS_DataReadFromNand(unsigned int zoneID, unsigned int originReqSlotTag);
 
-unsigned int ZNS_AddrTrans(unsigned int zoneID, unsigned int lsa);
+unsigned int ZNS_AddrTransWrite(unsigned int zoneID, unsigned int lsa);
+
+unsigned int ZNS_AddrTransRead(unsigned int zoneID, unsigned int lsa);
 
 #endif
