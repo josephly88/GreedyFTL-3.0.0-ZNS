@@ -63,17 +63,7 @@
 #define NVME_MANAGEMENT_END_ADDR		        0x002FFFFF
 
 #define RESERVED0_START_ADDR			        0x00300000
-#define RESERVED0_END_ADDR                      0x003FFFFF
-
-//for ZNS map tables
-#define ZNS_MANAGEMENT_START_ADDR               0x00400000
-// for map tables
-#define ZONE_MAP_ADDR                           0x00500000 
-#define ZNS_READ_BUF_HASH_TABLE_ADDR            (ZONE_MAP_ADDR + sizeof(ZONE_MAP))
-#define ZONE_WRITE_BUFFER_MAP_ADDR              (ZNS_READ_BUF_HASH_TABLE_ADDR + sizeof(ZNS_READ_BUF_HASH_TABLE))  
-#define VALID_BLOCK_GROUP_FIFO_ADDR             (ZONE_WRITE_BUFFER_MAP_ADDR + sizeof(ZONE_WRITE_BUFFER_MAP)) // Upper Bound: 0x00400000
-
-#define ZNS_MANAGEMENT_END_ADDR			        0x0FFFFFFF
+#define RESERVED0_END_ADDR                      0x0FFFFFFF
 
 #define FTL_MANAGEMENT_START_ADDR		        0x10000000
 // Uncached & Unbuffered
@@ -113,7 +103,17 @@
 
 #define FTL_MANAGEMENT_END_ADDR				((WAY_PRIORITY_TABLE_ADDR + sizeof(WAY_PRIORITY_TABLE))- 1)
 
-#define RESERVED1_START_ADDR				(FTL_MANAGEMENT_END_ADDR + 1)
+//for ZNS map tables
+#define ZNS_MANAGEMENT_START_ADDR               (FTL_MANAGEMENT_END_ADDR + 1)
+// for map tables
+#define ZONE_MAP_ADDR                           ZNS_MANAGEMENT_START_ADDR 
+#define ZNS_READ_BUF_HASH_TABLE_ADDR            (ZONE_MAP_ADDR + sizeof(ZONE_MAP))
+#define ZONE_WRITE_BUFFER_MAP_ADDR              (ZNS_READ_BUF_HASH_TABLE_ADDR + sizeof(ZNS_READ_BUF_HASH_TABLE))  
+#define VALID_BLOCK_GROUP_FIFO_ADDR             (ZONE_WRITE_BUFFER_MAP_ADDR + sizeof(ZONE_WRITE_BUFFER_MAP)) // Upper Bound: 0x00400000
+
+#define ZNS_MANAGEMENT_END_ADDR			        (VALID_BLOCK_GROUP_FIFO_ADDR + sizeof(VALID_BLOCK_GROUP_FIFO) - 1
+
+#define RESERVED1_START_ADDR				(ZNS_MANAGEMENT_END_ADDR + 1)
 #define RESERVED1_END_ADDR					0x3FFFFFFF
 
 #define DRAM_END_ADDR						0x3FFFFFFF

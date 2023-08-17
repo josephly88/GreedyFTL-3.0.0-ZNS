@@ -10,7 +10,7 @@
 #define ZNS_IO_COMMAND_SET									1			// 0-Normal, 1-ZNS
 
 // Row Group: 1-8192 (Must be a factor of 8192 (USER_BLOCKS_PER_DIE). E.g., 8192 / 1024 = 8 that has no remainder)
-#define NUM_OF_BLOCK_PER_ZONE								8			// 1 Block : 2MB
+#define NUM_OF_BLOCK_PER_ZONE								1			// 1 Block : 2MB
 // Column Group: 1-64 (Must be a factor of 64 (USER_DIES). E.g., 64 / 4 = 16 that has no remainder)
 #define NUM_OF_DIE_PER_ZONE									64		
 
@@ -100,7 +100,7 @@ typedef struct _ZONE_MAP
 
 typedef struct _VALID_BLOCK_GROUP_FIFO
 {
-	unsigned int FIFO_LIST[BLOCK_GROUP_PER_SSD];
+	int FIFO_LIST[BLOCK_GROUP_PER_SSD];
 	unsigned int Valid_Count;
 	int Head;	// Head of FIFO
 	int Rear;	// Tail of FIFO

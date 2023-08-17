@@ -30,7 +30,6 @@ void InitZNS()
 	xil_printf("- BLOCK_GROUP_PER_SSD: %d\r\n", BLOCK_GROUP_PER_SSD);
 	xil_printf("- ZONE_BLOCK_GROUP_START: %d\r\n", ZONE_BLOCK_GROUP_START);
 	xil_printf("\r\n");
-
 	
 	validBlockGroupFifoPtr = (P_VALID_BLOCK_GROUP_FIFO) VALID_BLOCK_GROUP_FIFO_ADDR;
 	validBlockGroupFifoPtr->Valid_Count = 0;
@@ -91,15 +90,20 @@ void resetWriteBufferReg(int BufferID){
 }
 
 void eliminateBadBlockGroups(){
-	int baditv, bgIdx, validcnt;
-	
+	int bkidx, baditv;
+
+	for(bkidx = 0; bkidx < BLOCK_GROUP_PER_SSD; bkidx++){
+		if(bkidx < ZONE_BLOCK_GROUP_START)
+			validBlockGroupFifoPtr->FIFO_LIST[bkidx] = -1;
+		else{
+			validBlockGroupFifoPtr->FIFO_LIST[bkidx] = bkidx;
+			validBlockGroupFifoPtr->Valid_Count++;
+		}
+	}
+
 	int BadBlockTuplesSize = (sizeof(BadBlockTuples)/sizeof(int));
 	if(BadBlockTuplesSize % 2 == 1)
 		assert(!"[Error] BadBlockTuples: The length must be even number [Error]");
-
-	int badblockgroup[BLOCK_GROUP_PER_SSD];
-	for(bgIdx = 0; bgIdx < BLOCK_GROUP_PER_SSD; bgIdx++)
-		badblockgroup[bgIdx] = 0;
 
 	for(baditv = 0; baditv < BadBlockTuplesSize; baditv += 2){
 		int badblk;
@@ -112,23 +116,23 @@ void eliminateBadBlockGroups(){
 			int BG_column = (badblk % 64) / NUM_OF_DIE_PER_ZONE;
 			int BG = BG_row * (64/NUM_OF_DIE_PER_ZONE) + BG_column;
 
-			badblockgroup[BG] = 1;
+			validBlockGroupFifoPtr->FIFO_LIST[BG] = -1;
 			//xil_printf("Bad Block %d is found in Block Group %d\r\n", badblk, BG);
 		}
 	}
 
-	validcnt = 0;
-	for(bgIdx = 0; bgIdx < BLOCK_GROUP_PER_SSD; bgIdx++){
-		if(badblockgroup[bgIdx] == 0 && bgIdx >= ZONE_BLOCK_GROUP_START){
-			validBlockGroupFifoPtr->FIFO_LIST[validcnt] = bgIdx;
-			validcnt++;
+	int valididx = 0;
+	for(bkidx = 0; bkidx < BLOCK_GROUP_PER_SSD; bkidx++){
+		if(validBlockGroupFifoPtr->FIFO_LIST[bkidx] != -1){
+			validBlockGroupFifoPtr->FIFO_LIST[valididx] = validBlockGroupFifoPtr->FIFO_LIST[bkidx];
+			valididx++;
 		}
 		else{
-			if(badblockgroup[bgIdx] == 1)
-				xil_printf("Bad Block Group %d is skipped!\r\n", bgIdx);
+			if(bkidx >= ZONE_BLOCK_GROUP_START)
+				xil_printf("Block Group %d is skipped\r\n", bkidx);
 		}
 	}
-	validBlockGroupFifoPtr->Valid_Count = validcnt;
+	validBlockGroupFifoPtr->Valid_Count = valididx;
 }
 
 void shuffleValidBlockGroups(){
@@ -208,7 +212,7 @@ int ZoneWriteCheck(unsigned int zoneID, unsigned int slba, unsigned int nlb){
 	}
 
 	if(zoneMapPtr->zoneReg[zoneID].Zone_State == EMPTY){
-		if(zoneMapPtr->Num_Open_Zone >= MAXIMUM_OPEN_ZONE_COUNT){
+		if(zoneMapPtr->Num_Open_Zone > MAXIMUM_OPEN_ZONE_COUNT){
 			xil_printf("Maximum Open Zone Count Reached: %d\r\n", MAXIMUM_OPEN_ZONE_COUNT);
 			return -1;
 		}
@@ -227,6 +231,8 @@ int ZoneWriteCheck(unsigned int zoneID, unsigned int slba, unsigned int nlb){
 	zoneMapPtr->zoneReg[zoneID].Write_Pointer += nlb;
 	if(zoneMapPtr->zoneReg[zoneID].Write_Pointer >= zoneReg.SLBA + NVME_BLOCKS_PER_ZONE){
 		zoneMapPtr->zoneReg[zoneID].Zone_State = FULL;
+		zoneMapPtr->Num_Open_Zone--;
+		zoneMapPtr->Num_Full_Zone++;
 	}
 
     return zoneMapPtr->zoneReg[zoneID].Buffer_ID;
@@ -578,7 +584,7 @@ unsigned int ZNS_AddrTrans(unsigned int zoneID, unsigned int lsa){
 
 	vsaPtr->blockNo = outerBlockNo * NUM_OF_BLOCK_PER_ZONE + innerBlockNo;
 
-	xil_printf("ZNS_AddrTrans: lsa: %x, zoneID: %d, BufferID: %d, blockNo: %d, pageNo: %d, wayNo: %d, chNo: %d\r\n", lsa, zoneID, zoneMapPtr->zoneReg[zoneID].Buffer_ID, vsaPtr->blockNo, vsaPtr->pageNo, vsaPtr->wayNo, vsaPtr->chNo);
+	//xil_printf("ZNS_AddrTrans: lsa: %x, zoneID: %d, BufferID: %d, blockNo: %d, pageNo: %d, wayNo: %d, chNo: %d\r\n", lsa, zoneID, zoneMapPtr->zoneReg[zoneID].Buffer_ID, vsaPtr->blockNo, vsaPtr->pageNo, vsaPtr->wayNo, vsaPtr->chNo);
 
 	return vsa;
 }
