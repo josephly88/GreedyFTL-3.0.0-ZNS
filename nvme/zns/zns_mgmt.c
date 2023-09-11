@@ -172,7 +172,7 @@ void resetZone(unsigned int zoneId){
         for(DieIdx = 0; DieIdx < NUM_OF_DIE_PER_ZONE; DieIdx++){
             unsigned int dieNo, blockNo;
             dieNo = ((zoneReg.Phy_Block_Group_ID % BLOCK_GROUP_IN_COLUMN) * NUM_OF_DIE_PER_ZONE) + DieIdx;
-            if(CHANNEL_DIE_ORIENTED == 1)      // Swap ch & way
+            if(CHANNEL_WAY_ORIENTED == 1)      // Swap ch & way
                 dieNo = dieNo / 8 + ((dieNo % 8) * 8);
             blockNo = zoneReg.Phy_Block_Group_ID / BLOCK_GROUP_IN_COLUMN * NUM_OF_BLOCK_PER_ZONE + innerBlockNo;
             EraseBlock(dieNo, blockNo);

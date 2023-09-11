@@ -568,7 +568,7 @@ unsigned int ZNS_AddrTransWrite(unsigned int zoneID, unsigned int lsa){
 	vsaPtr = (ZNS_VirtualSliceAddr*) &virtualSliceAddr;
 
 	dieNo = ((BLOCK_GROUP_ID % BLOCK_GROUP_IN_COLUMN) * NUM_OF_DIE_PER_ZONE) + (lsa % NUM_OF_DIE_PER_ZONE);
-	if(CHANNEL_DIE_ORIENTED == 0){
+	if(CHANNEL_WAY_ORIENTED == 0){
 		vsaPtr->chNo = Vdie2PchTranslation(dieNo);
 		vsaPtr->wayNo = Vdie2PwayTranslation(dieNo);
 	}
@@ -602,7 +602,7 @@ unsigned int ZNS_AddrTransRead(unsigned int zoneID, unsigned int lsa){
 	vsaPtr = (ZNS_VirtualSliceAddr*) &virtualSliceAddr;
 
 	dieNo = ((BLOCK_GROUP_ID % BLOCK_GROUP_IN_COLUMN) * NUM_OF_DIE_PER_ZONE) + (lsa % NUM_OF_DIE_PER_ZONE);
-	if(CHANNEL_DIE_ORIENTED == 0){
+	if(CHANNEL_WAY_ORIENTED == 0){
 		vsaPtr->chNo = Vdie2PchTranslation(dieNo);
 		vsaPtr->wayNo = Vdie2PwayTranslation(dieNo);
 	}
