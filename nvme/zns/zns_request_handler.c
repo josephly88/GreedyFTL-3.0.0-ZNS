@@ -195,7 +195,7 @@ int ZoneWriteCheck(unsigned int zoneID, unsigned int slba, unsigned int nlb){
 	// Zone State Check
 	if(zoneReg.Zone_State != IMPLICITLY_OPENED && zoneReg.Zone_State != EXPLICITLY_OPENED
 	 && zoneReg.Zone_State != CLOSED && zoneReg.Zone_State != EMPTY){
-		xil_printf("Zone State Error: %d\r\n", zoneReg.Zone_State);
+		xil_printf("Zone [%d] Zone State Error: %d\r\n", zoneID, zoneReg.Zone_State);
 		return -1;
 	}
 	
