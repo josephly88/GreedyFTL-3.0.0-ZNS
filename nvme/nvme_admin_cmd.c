@@ -361,6 +361,8 @@ void handle_identify(NVME_ADMIN_COMMAND *nvmeAdminCmd, NVME_COMPLETION *nvmeCPL)
 		prp[0] = nvmeAdminCmd->PRP2[0];
 		prp[1] = nvmeAdminCmd->PRP2[1];
 
+		if(prp[1] != nvmeAdminCmd->PRP1[1])
+			xil_printf("PRP1 = 0x%X-%X, PRP2[1] = 0x%X-%X\r\n", nvmeAdminCmd->PRP1[1], nvmeAdminCmd->PRP1[0], nvmeAdminCmd->PRP2[1], nvmeAdminCmd->PRP2[0]);
 		ASSERT(prp[1] == nvmeAdminCmd->PRP1[1]);
 
 		set_direct_tx_dma(pIdentifyData, prp[1], prp[0], prpLen);
