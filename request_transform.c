@@ -106,12 +106,12 @@ void ReqTransNvmeToSlice(unsigned int cmdSlotTag, unsigned int startLba, unsigne
 			}
 
 			if(cmdCode == IO_NVM_WRITE){
-				if(ZoneWriteCheck(zoneID, startLba, nlb + 1) < 0)
+				if(ZoneWriteCheck(zoneID, startLba, requestedNvmeBlock) < 0)
 					return;
 				reqCode = REQ_CODE_ZONE_WRITE;
 			}
 			else if(cmdCode == IO_NVM_READ){
-				if(ZoneReadCheck(zoneID, startLba, nlb + 1) < 0)
+				if(ZoneReadCheck(zoneID, startLba, requestedNvmeBlock) < 0)
 					return;
 				reqCode = REQ_CODE_ZONE_READ;
 			}
