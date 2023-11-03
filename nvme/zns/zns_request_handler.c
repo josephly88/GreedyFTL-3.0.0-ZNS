@@ -500,7 +500,7 @@ void ZNS_EvictDataBufEntry(unsigned int zoneID, unsigned int originReqSlotTag){
 	int curWriteIdx = zoneWriteBufMapPtr->zoneWriteBufReg[bufferID].curWriteIdx;
 
 	// Ping-Pong Buffer, Flash write the next row buffer if it is dirty
-	dataBufEntry = ZNS_DATA_BUFFER_ENTRY_START + (bufferID * DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE) + ((curWriteIdx + SLICE_PER_STRIPE) % DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE);
+	dataBufEntry = ZNS_DATA_BUFFER_ENTRY_START + (bufferID * DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE) + ((curWriteIdx + (DATA_BUFFER_STRIPE_PER_OPEN_ZONE / 2) * SLICE_PER_STRIPE) % DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE);
 	if(dataBufMapPtr->dataBuf[dataBufEntry].dirty == DATA_BUF_DIRTY)
 	{
 		//xil_printf("Evict DataBufEntry : %d, SliceAddr : 0x%x\r\n", dataBufEntry, dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr);
