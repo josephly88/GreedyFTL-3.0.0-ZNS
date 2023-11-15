@@ -180,6 +180,13 @@ unsigned int bufferIDFifo_Dequeue(){
 	int element = zoneWriteBufMapPtr->FIFO_LIST[zoneWriteBufMapPtr->Head];
 	zoneWriteBufMapPtr->Head = (zoneWriteBufMapPtr->Head + 1) % MAXIMUM_OPEN_ZONE_COUNT;
 
+	int oldZoneID = zoneWriteBufMapPtr->zoneWriteBufReg[element].ZoneID;
+	unsigned int reqSlotTag = GetFromSliceReqQ();
+	ZNS_EvictAllDataBufEntry(oldZoneID, reqSlotTag);
+	zoneMapPtr->zoneReg[oldZoneID].Buffer_ID = -1;
+
+	resetWriteBufferReg(element);
+
 	return element;
 }
 
@@ -233,6 +240,8 @@ int ZoneWriteCheck(unsigned int zoneID, unsigned int slba, unsigned int nlb){
 		zoneMapPtr->zoneReg[zoneID].Zone_State = FULL;
 		zoneMapPtr->Num_Open_Zone--;
 		zoneMapPtr->Num_Full_Zone++;
+
+		bufferIDFifo_Enqueue(zoneID);
 	}
 
     return zoneMapPtr->zoneReg[zoneID].Buffer_ID;
@@ -271,6 +280,10 @@ void incrementDataBufPointer(unsigned int zoneID){
 }
 
 unsigned int checkZoneWriteDataBuf(unsigned int reqSlotTag, unsigned int zoneID){
+	// Not in an open state
+	if(zoneMapPtr->zoneReg->Buffer_ID == -1)
+		return DATA_BUF_FAIL;
+
 	unsigned int LatestdataBufEntry = GetZoneDataBuf(zoneID, -1);
 	unsigned int slice_diff = dataBufMapPtr->dataBuf[LatestdataBufEntry].logicalSliceAddr - reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr;
 
@@ -449,7 +462,6 @@ void ZNS_ReqTransSliceToLowLevel(unsigned int reqSlotTag){
 		}
 
 		reqPoolPtr->reqPool[reqSlotTag].dataBufInfo.entry = dataBufEntry;
-
 		ZNS_EvictDataBufEntry(zoneID, reqSlotTag);
 		if(dataBufEntry != last_dataBufEntry)
 			incrementDataBufPointer(zoneID);
@@ -469,12 +481,17 @@ void ZNS_ReqTransSliceToLowLevel(unsigned int reqSlotTag){
 		if(dataBufEntry == DATA_BUF_FAIL){
 			dataBufEntry = checkZoneReadDataBuf(reqSlotTag);
 			if(dataBufEntry == DATA_BUF_FAIL){
-				dataBufEntry = AllocateZoneDataBuf();
-				
-				dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr = reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr;
-				PutToZoneDataBufHashList(dataBufEntry);
+				if(FLASH_BATCH_READ){
 
-				ZNS_DataReadFromNand(zoneID, reqSlotTag);
+				}
+				else{
+					dataBufEntry = AllocateZoneDataBuf();
+					
+					dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr = reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr;
+					PutToZoneDataBufHashList(dataBufEntry);
+
+					ZNS_DataReadFromNand(zoneID, reqSlotTag);
+				}
 			}
 		}
 
@@ -526,6 +543,44 @@ void ZNS_EvictDataBufEntry(unsigned int zoneID, unsigned int originReqSlotTag){
 
 		dataBufMapPtr->dataBuf[dataBufEntry].dirty = DATA_BUF_CLEAN;
 	}
+}
+
+void ZNS_EvictAllDataBufEntry(unsigned int zoneID, unsigned int originReqSlotTag){
+	unsigned int reqSlotTag, virtualSliceAddr, dataBufEntry;
+	int bufferID = zoneMapPtr->zoneReg[zoneID].Buffer_ID;
+	int curWriteIdx = 0;
+
+	while(curWriteIdx < DATA_BUFFER_STRIPE_PER_OPEN_ZONE * SLICE_PER_STRIPE){
+		dataBufEntry = ZNS_DATA_BUFFER_ENTRY_START + (bufferID * DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE) + curWriteIdx;
+		if(dataBufMapPtr->dataBuf[dataBufEntry].dirty == DATA_BUF_DIRTY)
+		{
+			//xil_printf("Evict DataBufEntry : %d, SliceAddr : 0x%x\r\n", dataBufEntry, dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr);
+			reqSlotTag = GetFromFreeReqQ();
+			virtualSliceAddr = ZNS_AddrTransWrite(zoneID, dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr);
+
+			reqPoolPtr->reqPool[reqSlotTag].reqType = REQ_TYPE_NAND;
+			reqPoolPtr->reqPool[reqSlotTag].reqCode = REQ_CODE_WRITE;
+			reqPoolPtr->reqPool[reqSlotTag].nvmeCmdSlotTag = reqPoolPtr->reqPool[originReqSlotTag].nvmeCmdSlotTag;
+			reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr = dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr;
+			reqPoolPtr->reqPool[reqSlotTag].reqOpt.dataBufFormat = REQ_OPT_DATA_BUF_ENTRY;
+			reqPoolPtr->reqPool[reqSlotTag].reqOpt.nandAddr = REQ_OPT_NAND_ADDR_VSA;
+
+			reqPoolPtr->reqPool[reqSlotTag].reqOpt.nandEcc = REQ_OPT_NAND_ECC_ON;
+			reqPoolPtr->reqPool[reqSlotTag].reqOpt.nandEccWarning = REQ_OPT_NAND_ECC_WARNING_ON;
+			reqPoolPtr->reqPool[reqSlotTag].reqOpt.rowAddrDependencyCheck = REQ_OPT_ROW_ADDR_DEPENDENCY_CHECK;
+			reqPoolPtr->reqPool[reqSlotTag].reqOpt.blockSpace = REQ_OPT_BLOCK_SPACE_MAIN;
+			reqPoolPtr->reqPool[reqSlotTag].dataBufInfo.entry = dataBufEntry;
+			UpdateDataBufEntryInfoBlockingReq(dataBufEntry, reqSlotTag);
+			reqPoolPtr->reqPool[reqSlotTag].nandInfo.virtualSliceAddr = virtualSliceAddr;
+
+			SelectLowLevelReqQ(reqSlotTag);
+
+			dataBufMapPtr->dataBuf[dataBufEntry].dirty = DATA_BUF_CLEAN;
+		}
+		
+		curWriteIdx++;
+	}
+	
 }
 
 void ZNS_DataReadFromNand(unsigned int zoneID, unsigned int originReqSlotTag)
