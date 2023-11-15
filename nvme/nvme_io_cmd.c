@@ -185,6 +185,8 @@ void handle_nvme_io_zns_mgmt_recv(unsigned int cmdSlotTag, NVME_IO_COMMAND *nvme
 	unsigned int num_zone = zoneMapPtr->Num_Open_Zone + zoneMapPtr->Num_Close_Zone + zoneMapPtr->Num_Full_Zone + zoneMapPtr->Num_Empty_Zone + zoneMapPtr->Num_Read_Zone + zoneMapPtr->Num_Off_Zone;
 	zone_report->num_zone = num_zone;
 	
+	xil_printf("open: %d, close: %d, full: %d, empty: %d, read: %d, off: %d\r\n", zoneMapPtr->Num_Open_Zone, zoneMapPtr->Num_Close_Zone, zoneMapPtr->Num_Full_Zone, zoneMapPtr->Num_Empty_Zone, zoneMapPtr->Num_Read_Zone, zoneMapPtr->Num_Off_Zone);
+
 	int zone_itr = 0;
 	unsigned int REQ_ZONE_STATE = mgmtRecvInfo.ZRA_specific_field;	
 	int i;

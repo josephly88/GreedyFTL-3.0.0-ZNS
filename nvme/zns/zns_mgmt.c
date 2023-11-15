@@ -103,7 +103,7 @@ void handle_zns_reset_zone(IO_ZNS_ZONE_MANGAEMENT_SEND_DW13 mgmtSendInfo, unsign
 
     if(mgmtSendInfo.SELECT_ALL == 1){
         int ZoneID;
-        for(ZoneID = 0; ZoneID < MAXIMUM_OPEN_ZONE_COUNT; ZoneID++){
+        for(ZoneID = 0; ZoneID < MAXIMUM_ACTIVE_ZONE_COUNT; ZoneID++){
             ZONE_REG* zoneReg = &zoneMapPtr->zoneReg[ZoneID];
             unsigned char cur_state = zoneReg->Zone_State;
 
