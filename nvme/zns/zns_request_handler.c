@@ -185,7 +185,7 @@ void validBlockGroupFifo_Enqueue(unsigned int element){
 }
 
 unsigned int bufferIDFifo_Dequeue(){
-	int element;
+	int element = -1;
 
 	if(zoneWriteBufMapPtr->Num == 0){
 		int zone_idx;
