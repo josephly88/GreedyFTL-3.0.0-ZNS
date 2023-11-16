@@ -33,9 +33,9 @@ void InitZNS()
 	
 	validBlockGroupFifoPtr = (P_VALID_BLOCK_GROUP_FIFO) VALID_BLOCK_GROUP_FIFO_ADDR;
 	validBlockGroupFifoPtr->Valid_Count = 0;
-
 	eliminateBadBlockGroups();
-	shuffleValidBlockGroups();		
+	shuffleValidBlockGroups();
+	validBlockGroupFifoPtr->Num = validBlockGroupFifoPtr->Valid_Count;
 	
 	zoneMapPtr = (P_ZONE_MAP) ZONE_MAP_ADDR;
 
@@ -56,6 +56,7 @@ void InitZNS()
 	}
 	zoneWriteBufMapPtr->Head = 0;
 	zoneWriteBufMapPtr->Rear = MAXIMUM_OPEN_ZONE_COUNT - 1;
+	zoneWriteBufMapPtr->Num = MAXIMUM_OPEN_ZONE_COUNT;
 
 	// Initialize Read Buffer
 	for(i = 0; i < SLICE_PER_STRIPE; i++){
@@ -160,34 +161,66 @@ void shuffleValidBlockGroups(){
 }
 
 unsigned int validBlockGroupFifo_Dequeue(){
+	if(validBlockGroupFifoPtr->Num == 0)
+		assert(!"[Error] validBlockGroupFifoPtr is empty [Error]");
+
 	int element = validBlockGroupFifoPtr->FIFO_LIST[validBlockGroupFifoPtr->Head];
-	validBlockGroupFifoPtr->Head = (validBlockGroupFifoPtr->Head + 1) % validBlockGroupFifoPtr->Valid_Count;
+	if(validBlockGroupFifoPtr->Num > 1)
+		validBlockGroupFifoPtr->Head = (validBlockGroupFifoPtr->Head + 1) % validBlockGroupFifoPtr->Valid_Count;
+
+	validBlockGroupFifoPtr->Num--;
 
 	return element;
 }
 
 void validBlockGroupFifo_Enqueue(unsigned int element){
-	validBlockGroupFifoPtr->Rear = (validBlockGroupFifoPtr->Rear + 1) % validBlockGroupFifoPtr->Valid_Count;
+	if(validBlockGroupFifoPtr->Num >= validBlockGroupFifoPtr->Valid_Count)
+		assert(!"[Error] validBlockGroupFifoPtr is full [Error]");
+
+	if(validBlockGroupFifoPtr->Num > 0)
+		validBlockGroupFifoPtr->Rear = (validBlockGroupFifoPtr->Rear + 1) % validBlockGroupFifoPtr->Valid_Count;
 	validBlockGroupFifoPtr->FIFO_LIST[validBlockGroupFifoPtr->Rear] = element;
+
+	validBlockGroupFifoPtr->Num++;
 }
 
 unsigned int bufferIDFifo_Dequeue(){
-	int element = zoneWriteBufMapPtr->FIFO_LIST[zoneWriteBufMapPtr->Head];
-	zoneWriteBufMapPtr->Head = (zoneWriteBufMapPtr->Head + 1) % MAXIMUM_OPEN_ZONE_COUNT;
+	int element;
 
-	int oldZoneID = zoneWriteBufMapPtr->zoneWriteBufReg[element].ZoneID;
-	unsigned int reqSlotTag = GetFromSliceReqQ();
-	ZNS_EvictAllDataBufEntry(oldZoneID, reqSlotTag);
-	zoneMapPtr->zoneReg[oldZoneID].Buffer_ID = -1;
+	if(zoneWriteBufMapPtr->Num == 0){
+		int zone_idx;
+		for(zone_idx = 0; zone_idx < MAXIMUM_ACTIVE_ZONE_COUNT; zone_idx++){
+			if(zoneMapPtr->zoneReg[zone_idx].Zone_State == FULL && zoneMapPtr->zoneReg[zone_idx].Buffer_ID != -1){
+				element = zoneMapPtr->zoneReg[zone_idx].Buffer_ID;
 
-	resetWriteBufferReg(element);
+				unsigned int reqSlotTag = GetFromSliceReqQ();
+				ZNS_EvictAllDataBufEntry(zone_idx, reqSlotTag);
+				zoneMapPtr->zoneReg[zone_idx].Buffer_ID = -1;
+
+				break;
+			}		
+		}
+	}
+	else{
+		element = zoneWriteBufMapPtr->FIFO_LIST[zoneWriteBufMapPtr->Head];
+		if(zoneWriteBufMapPtr->Num > 1)
+			zoneWriteBufMapPtr->Head = (zoneWriteBufMapPtr->Head + 1) % MAXIMUM_OPEN_ZONE_COUNT;
+
+		zoneWriteBufMapPtr->Num--;
+	}
 
 	return element;
 }
 
 void bufferIDFifo_Enqueue(unsigned int element){
-	zoneWriteBufMapPtr->Rear = (zoneWriteBufMapPtr->Rear + 1) % MAXIMUM_OPEN_ZONE_COUNT;
+	if(zoneWriteBufMapPtr->Num >= MAXIMUM_OPEN_ZONE_COUNT)
+		assert(!"[Error] zoneWriteBufMapPtr is full [Error]");
+
+	if(zoneWriteBufMapPtr->Num > 0)
+		zoneWriteBufMapPtr->Rear = (zoneWriteBufMapPtr->Rear + 1) % MAXIMUM_OPEN_ZONE_COUNT;
 	zoneWriteBufMapPtr->FIFO_LIST[zoneWriteBufMapPtr->Rear] = element;
+
+	zoneWriteBufMapPtr->Num++;
 }
 
 int ZoneWriteCheck(unsigned int zoneID, unsigned int slba, unsigned int nlb){
@@ -233,8 +266,6 @@ int ZoneWriteCheck(unsigned int zoneID, unsigned int slba, unsigned int nlb){
 	if(zoneMapPtr->zoneReg[zoneID].Write_Pointer >= zoneReg.SLBA + NVME_BLOCKS_PER_ZONE){
 		zoneMapPtr->zoneReg[zoneID].Zone_State = FULL;
 		zoneMapPtr->Num_Open_Zone--;
-
-		bufferIDFifo_Enqueue(zoneID);
 	}
 
     return zoneMapPtr->zoneReg[zoneID].Buffer_ID;

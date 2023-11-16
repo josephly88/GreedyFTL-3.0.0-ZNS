@@ -101,6 +101,7 @@ typedef struct _VALID_BLOCK_GROUP_FIFO
 	unsigned int Valid_Count;
 	int Head;	// Head of FIFO
 	int Rear;	// Tail of FIFO
+	int Num;
 } VALID_BLOCK_GROUP_FIFO, *P_VALID_BLOCK_GROUP_FIFO;
 
 typedef struct _ZONE_WRITE_BUF_REG
@@ -115,6 +116,7 @@ typedef struct _ZONE_WRITE_BUFFER_MAP
 	ZONE_WRITE_BUF_REG zoneWriteBufReg[MAXIMUM_OPEN_ZONE_COUNT];
 	int Head;	// Head of FIFO
 	int Rear;	// Tail of FIFO
+	int Num;
 } ZONE_WRITE_BUFFER_MAP, *P_ZONE_WRITE_BUFFER_MAP;
 
 /*-------------------------------------------------------------
