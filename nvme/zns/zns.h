@@ -91,11 +91,6 @@ typedef struct _ZONE_REG
 typedef struct _ZONE_MAP
 {
     unsigned int Num_Open_Zone;
-    unsigned int Num_Close_Zone;
-    unsigned int Num_Full_Zone;
-    unsigned int Num_Empty_Zone;
-    unsigned int Num_Read_Zone;
-    unsigned int Num_Off_Zone;
     ZONE_REG zoneReg[MAXIMUM_ACTIVE_ZONE_COUNT];
 	unsigned int readBufPtr[64];
 } ZONE_MAP, *P_ZONE_MAP;

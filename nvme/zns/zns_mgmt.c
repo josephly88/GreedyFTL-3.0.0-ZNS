@@ -112,12 +112,6 @@ void handle_zns_reset_zone(IO_ZNS_ZONE_MANGAEMENT_SEND_DW13 mgmtSendInfo, unsign
                 
                 if(cur_state == IMPLICITLY_OPENED || cur_state == EXPLICITLY_OPENED)
                     zoneMapPtr->Num_Open_Zone--;
-                else if(cur_state == CLOSED)
-                    zoneMapPtr->Num_Close_Zone--;
-                else if(cur_state == FULL)
-                    zoneMapPtr->Num_Full_Zone--;
-
-                zoneMapPtr->Num_Empty_Zone++;
             }                
         }
     }
@@ -135,12 +129,6 @@ void handle_zns_reset_zone(IO_ZNS_ZONE_MANGAEMENT_SEND_DW13 mgmtSendInfo, unsign
 
             if(cur_state == IMPLICITLY_OPENED || cur_state == EXPLICITLY_OPENED)
                 zoneMapPtr->Num_Open_Zone--;
-            else if(cur_state == CLOSED)
-                zoneMapPtr->Num_Close_Zone--;
-            else if(cur_state == FULL)
-                zoneMapPtr->Num_Full_Zone--;
-
-            zoneMapPtr->Num_Empty_Zone++;
         }
         else if(cur_state == READ_ONLY || cur_state == OFFLINE){
             // Abort

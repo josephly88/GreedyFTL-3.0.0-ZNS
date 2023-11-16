@@ -41,11 +41,6 @@ void InitZNS()
 
 	// Initialize ZNS Metadata
     zoneMapPtr->Num_Open_Zone = 0;
-    zoneMapPtr->Num_Close_Zone = 0;
-    zoneMapPtr->Num_Full_Zone = 0;
-    zoneMapPtr->Num_Empty_Zone = MAXIMUM_ACTIVE_ZONE_COUNT;
-    zoneMapPtr->Num_Read_Zone = 0;
-    zoneMapPtr->Num_Off_Zone = 0;
 
 	// Initialize Zone Metadata
 	int i;
@@ -225,9 +220,6 @@ int ZoneWriteCheck(unsigned int zoneID, unsigned int slba, unsigned int nlb){
 		}
 		zoneMapPtr->zoneReg[zoneID].Zone_State = IMPLICITLY_OPENED;
 		zoneMapPtr->Num_Open_Zone++;
-		zoneMapPtr->Num_Empty_Zone--;
-
-		xil_printf("open: %d, close: %d, full: %d, empty: %d, read: %d, off: %d\r\n", zoneMapPtr->Num_Open_Zone, zoneMapPtr->Num_Close_Zone, zoneMapPtr->Num_Full_Zone, zoneMapPtr->Num_Empty_Zone, zoneMapPtr->Num_Read_Zone, zoneMapPtr->Num_Off_Zone);
 
 		int bufferID = bufferIDFifo_Dequeue();
 		zoneMapPtr->zoneReg[zoneID].Buffer_ID = bufferID;
@@ -241,9 +233,6 @@ int ZoneWriteCheck(unsigned int zoneID, unsigned int slba, unsigned int nlb){
 	if(zoneMapPtr->zoneReg[zoneID].Write_Pointer >= zoneReg.SLBA + NVME_BLOCKS_PER_ZONE){
 		zoneMapPtr->zoneReg[zoneID].Zone_State = FULL;
 		zoneMapPtr->Num_Open_Zone--;
-		zoneMapPtr->Num_Full_Zone++;
-
-		xil_printf("open: %d, close: %d, full: %d, empty: %d, read: %d, off: %d\r\n", zoneMapPtr->Num_Open_Zone, zoneMapPtr->Num_Close_Zone, zoneMapPtr->Num_Full_Zone, zoneMapPtr->Num_Empty_Zone, zoneMapPtr->Num_Read_Zone, zoneMapPtr->Num_Off_Zone);
 
 		bufferIDFifo_Enqueue(zoneID);
 	}

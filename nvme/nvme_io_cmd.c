@@ -182,15 +182,11 @@ void handle_nvme_io_zns_mgmt_recv(unsigned int cmdSlotTag, NVME_IO_COMMAND *nvme
 	memset(zone_report, 0, sizeof(IO_ZNS_MANAGEMENT_RECEIVE_ZONE_REPORT));
 
 	P_ZONE_MAP zoneMapPtr = (P_ZONE_MAP) ZONE_MAP_ADDR;
-	unsigned int num_zone = zoneMapPtr->Num_Open_Zone + zoneMapPtr->Num_Close_Zone + zoneMapPtr->Num_Full_Zone + zoneMapPtr->Num_Empty_Zone + zoneMapPtr->Num_Read_Zone + zoneMapPtr->Num_Off_Zone;
-	zone_report->num_zone = num_zone;
-	
-	xil_printf("open: %d, close: %d, full: %d, empty: %d, read: %d, off: %d\r\n", zoneMapPtr->Num_Open_Zone, zoneMapPtr->Num_Close_Zone, zoneMapPtr->Num_Full_Zone, zoneMapPtr->Num_Empty_Zone, zoneMapPtr->Num_Read_Zone, zoneMapPtr->Num_Off_Zone);
 
 	int zone_itr = 0;
 	unsigned int REQ_ZONE_STATE = mgmtRecvInfo.ZRA_specific_field;	
 	int i;
-	for(i = 0; i < num_zone; i++){
+	for(i = 0; i < MAXIMUM_ACTIVE_ZONE_COUNT; i++){
 
 		unsigned int ZONE_STATE = zoneMapPtr->zoneReg[i].Zone_State;
 		if(REQ_ZONE_STATE == 0x1){
@@ -230,6 +226,8 @@ void handle_nvme_io_zns_mgmt_recv(unsigned int cmdSlotTag, NVME_IO_COMMAND *nvme
 
 		zone_itr++;
 	}
+
+	zone_report->num_zone = zone_itr;
 
 	prp[0] = nvmeIOCmd->PRP1[0];
 	prp[1] = nvmeIOCmd->PRP1[1];
