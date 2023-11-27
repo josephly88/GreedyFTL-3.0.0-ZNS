@@ -82,7 +82,7 @@ void resetZoneReg(int ZoneID){
 
 void resetWriteBufferReg(int BufferID){
 	zoneWriteBufMapPtr->zoneWriteBufReg[BufferID].ZoneID = -1;
-	zoneWriteBufMapPtr->zoneWriteBufReg[BufferID].curWriteIdx = 0;
+	zoneWriteBufMapPtr->zoneWriteBufReg[BufferID].curWriteIdx = -1;
 }
 
 void eliminateBadBlockGroups(){
@@ -305,14 +305,14 @@ void incrementDataBufPointer(unsigned int zoneID){
 
 unsigned int checkZoneWriteDataBuf(unsigned int reqSlotTag, unsigned int zoneID){
 	// Not in an open state
-	if(zoneMapPtr->zoneReg->Buffer_ID == -1)
+	if(zoneMapPtr->zoneReg[zoneID].Buffer_ID == -1)
 		return DATA_BUF_FAIL;
 
-	unsigned int LatestdataBufEntry = GetZoneDataBuf(zoneID, -1);
+	unsigned int LatestdataBufEntry = GetZoneDataBuf(zoneID, 0);
 	unsigned int slice_diff = dataBufMapPtr->dataBuf[LatestdataBufEntry].logicalSliceAddr - reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr;
 
 	if(slice_diff < SLICE_PER_STRIPE){
-		unsigned int dataBufEntry = GetZoneDataBuf(zoneID, -(1+slice_diff));
+		unsigned int dataBufEntry = GetZoneDataBuf(zoneID, -slice_diff);
 		if(dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr == reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr){
 			//xil_printf("\tHit: Slice_diff : %d\r\n", slice_diff);
 			return dataBufEntry;
@@ -477,18 +477,17 @@ void ZNS_ReqTransSliceToLowLevel(unsigned int reqSlotTag){
 		//xil_printf("Catch a ZNS Request LogicalSliceAddr : 0x%x, zone ID : %d \r\n", reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr, zoneID);
 		
 		// In case write smaller than a slice
-		last_dataBufEntry = GetZoneDataBuf(zoneID, -1);
+		last_dataBufEntry = GetZoneDataBuf(zoneID, 0);
 		if(dataBufMapPtr->dataBuf[last_dataBufEntry].logicalSliceAddr == reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr){
 			dataBufEntry = last_dataBufEntry;
 		}
 		else{
+			incrementDataBufPointer(zoneID);
 			dataBufEntry = GetZoneDataBuf(zoneID, 0);
 		}
 
 		reqPoolPtr->reqPool[reqSlotTag].dataBufInfo.entry = dataBufEntry;
 		ZNS_EvictDataBufEntry(zoneID, reqSlotTag);
-		if(dataBufEntry != last_dataBufEntry)
-			incrementDataBufPointer(zoneID);
 
 		dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr = reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr;
 
