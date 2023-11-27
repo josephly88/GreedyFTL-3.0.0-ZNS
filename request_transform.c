@@ -357,6 +357,10 @@ unsigned int CheckRowAddrDep(unsigned int reqSlotTag, unsigned int checkRowAddrD
 				rowAddrDependencyTablePtr->block[chNo][wayNo][blockNo].blockedReadReqCnt--;
 				return	ROW_ADDR_DEPENDENCY_REPORT_PASS;
 			}
+			else{
+				xil_printf("pageNo: %d, permittedProgPage: %d\r\n", pageNo, rowAddrDependencyTablePtr->block[chNo][wayNo][blockNo].permittedProgPage);
+				assert(!"[WARNING] pageNo >= programmedPageCnt [WARNING]");
+			}
 		}
 		else
 			assert(!"[WARNING] Not supported checkRowAddrDepOpt [WARNING]");
