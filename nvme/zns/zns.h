@@ -12,7 +12,7 @@
 // Row Group: 1-8192 (Must be a factor of 8192 (USER_BLOCKS_PER_DIE). E.g., 8192 / 1024 = 8 that has no remainder)
 #define NUM_OF_BLOCK_PER_ZONE								1			// 1 Block : 2MB
 // Column Group: 1-64 (Must be a factor of 64 (USER_DIES). E.g., 64 / 4 = 16 that has no remainder)
-#define NUM_OF_DIE_PER_ZONE									64		
+#define NUM_OF_DIE_PER_ZONE									64
 
 #define MAXIMUM_OPEN_ZONE_COUNT                  			20
 #define MAXIMUM_ACTIVE_ZONE_COUNT                  			40
@@ -26,8 +26,8 @@
 // Each Stripe is NUM_OF_DIE_PER_ZONE
 #define DATA_BUFFER_STRIPE_PER_OPEN_ZONE					2
 // Each Entry is a slice (16KB)
-#define ACTIVE_ZONE_READ_BUFFER_ENTRY_COUNT					(1 * 64)		
-// Flash buffer pre-fetch
+#define ACTIVE_ZONE_READ_BUFFER_ENTRY_COUNT					(20 * 64)		
+// Flash buffer pre-fetch (Amount)
 #define FLASH_BATCH_READ									0
 
 /*-------------------------------------------------------------

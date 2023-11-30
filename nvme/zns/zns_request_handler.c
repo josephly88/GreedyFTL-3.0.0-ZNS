@@ -501,24 +501,49 @@ void ZNS_ReqTransSliceToLowLevel(unsigned int reqSlotTag){
 		//xil_printf("Catch a ZNS Request LogicalSliceAddr : 0x%x, zone ID : %d \r\n", reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr, zoneID);
 		
 		dataBufEntry = checkZoneWriteDataBuf(reqSlotTag, zoneID);
-		if(dataBufEntry == DATA_BUF_FAIL){
+		if(dataBufEntry != DATA_BUF_FAIL){
+			reqPoolPtr->reqPool[reqSlotTag].dataBufInfo.entry = dataBufEntry;
+		}
+		else{
 			dataBufEntry = checkZoneReadDataBuf(reqSlotTag);
-			if(dataBufEntry == DATA_BUF_FAIL){
-				if(FLASH_BATCH_READ){
-
-				}
-				else{
+			if(dataBufEntry != DATA_BUF_FAIL){
+				reqPoolPtr->reqPool[reqSlotTag].dataBufInfo.entry = dataBufEntry;
+			}
+			else{
 					dataBufEntry = AllocateZoneDataBuf();
+					reqPoolPtr->reqPool[reqSlotTag].dataBufInfo.entry = dataBufEntry;
 					
 					dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr = reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr;
 					PutToZoneDataBufHashList(dataBufEntry);
 
 					ZNS_DataReadFromNand(zoneID, reqSlotTag);
-				}
+
+					if(FLASH_BATCH_READ > 0){
+						int i = 1;
+						while(i < FLASH_BATCH_READ){
+							if(reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr + i >= (zoneMapPtr->zoneReg[zoneID].SLBA + NVME_BLOCKS_PER_ZONE) / NVME_BLOCKS_PER_SLICE);
+								break;
+							if(reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr + i >= zoneMapPtr->zoneReg[zoneID].Write_Pointer / NVME_BLOCKS_PER_SLICE)
+								break;
+
+							unsigned int reqSlotTagPreRead, dataBufEntryPreRead;
+
+							reqSlotTagPreRead = GetFromFreeReqQ();
+							reqPoolPtr->reqPool[reqSlotTagPreRead].logicalSliceAddr = reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr + i;
+
+							dataBufEntryPreRead = AllocateZoneDataBuf();
+							reqPoolPtr->reqPool[reqSlotTagPreRead].dataBufInfo.entry = dataBufEntryPreRead;
+
+							dataBufMapPtr->dataBuf[dataBufEntryPreRead].logicalSliceAddr = reqPoolPtr->reqPool[reqSlotTagPreRead].logicalSliceAddr;
+							PutToZoneDataBufHashList(dataBufEntryPreRead);
+
+							ZNS_DataReadFromNand(zoneID, reqSlotTagPreRead);
+
+							i++;
+						}
+					}
 			}
 		}
-
-		reqPoolPtr->reqPool[reqSlotTag].dataBufInfo.entry = dataBufEntry;
 
 		reqPoolPtr->reqPool[reqSlotTag].reqCode = REQ_CODE_TxDMA;
 		//xil_printf("Read Req. DataBufEntry : %d, SliceAddr : 0x%x\r\n", dataBufEntry, dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr);
@@ -681,7 +706,7 @@ unsigned int ZNS_AddrTransRead(unsigned int zoneID, unsigned int lsa){
 
 	blockNo = outerBlockNo * NUM_OF_BLOCK_PER_ZONE + innerBlockNo;
 
-	//xil_printf("ZNS_AddrTrans: lsa: %x, zoneID: %d, BufferID: %d, blockNo: %d, pageNo: %d, wayNo: %d, chNo: %d\r\n", lsa, zoneID, zoneMapPtr->zoneReg[zoneID].Buffer_ID, vsaPtr->blockNo, vsaPtr->pageNo, vsaPtr->wayNo, vsaPtr->chNo);
+	//xil_printf("ZNS_AddrTrans: lsa: %x, zoneID: %d, BufferID: %d, blockNo: %d, pageNo: %d, wayNo: %d, chNo: %d\r\n", lsa, zoneID, zoneMapPtr->zoneReg[zoneID].Buffer_ID, blockNo, pageNo, dieNo/8, dieNo%8);
 
 	virtualSliceAddr = Vorg2VsaTranslation(dieNo, blockNo, pageNo);
 
