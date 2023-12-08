@@ -115,10 +115,10 @@ void InitDataBuf()
 		dataBufMapPtr->dataBuf[bufEntry].hashPrevEntry = DATA_BUF_NONE;
 		dataBufMapPtr->dataBuf[bufEntry].hashNextEntry = DATA_BUF_NONE;
 	}
-	dataBufMapPtr->dataBuf[AVAILABLE_DATA_BUFFER_ENTRY_COUNT + OPEN_ZONE_DATA_BUFFER_ENTRY_COUNT].prevEntry = DATA_BUF_NONE;
+	dataBufMapPtr->dataBuf[base].prevEntry = DATA_BUF_NONE;
 	dataBufMapPtr->dataBuf[TOTAL_BUFFER_COUNT - 1].nextEntry = DATA_BUF_NONE;
-	znsReadBufLruList.headEntry = AVAILABLE_DATA_BUFFER_ENTRY_COUNT + OPEN_ZONE_DATA_BUFFER_ENTRY_COUNT;
-	znsReadBufLruList.tailEntry = TOTAL_BUFFER_COUNT - 1;
+	znsReadBufLruList.headEntry = base;
+	znsReadBufLruList.tailEntry = base + ACTIVE_ZONE_READ_BUFFER_ENTRY_COUNT - 1;
 }	
 
 unsigned int CheckDataBufHit(unsigned int reqSlotTag)
