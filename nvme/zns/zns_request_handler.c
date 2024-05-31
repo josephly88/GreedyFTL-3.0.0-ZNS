@@ -565,7 +565,8 @@ void ZNS_EvictDataBufEntry(unsigned int zoneID, unsigned int originReqSlotTag){
 	int curWriteIdx = zoneWriteBufMapPtr->zoneWriteBufReg[bufferID].curWriteIdx;
 
 	// Ping-Pong Buffer, Flash write the next row buffer if it is dirty
-	dataBufEntry = ZNS_DATA_BUFFER_ENTRY_START + (bufferID * DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE) + ((curWriteIdx + (DATA_BUFFER_STRIPE_PER_OPEN_ZONE / 2) * SLICE_PER_STRIPE) % DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE);
+	// Original Evict X - N/2
+	dataBufEntry = ZNS_DATA_BUFFER_ENTRY_START + (bufferID * DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE) + ((curWriteIdx + (DATA_BUFFER_STRIPE_PER_OPEN_ZONE * SLICE_PER_STRIPE / 2)) % DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE);
 	if(dataBufMapPtr->dataBuf[dataBufEntry].dirty == DATA_BUF_DIRTY)
 	{
 		//xil_printf("Evict DataBufEntry : %d, SliceAddr : 0x%x\r\n", dataBufEntry, dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr);
@@ -591,6 +592,42 @@ void ZNS_EvictDataBufEntry(unsigned int zoneID, unsigned int originReqSlotTag){
 
 		dataBufMapPtr->dataBuf[dataBufEntry].dirty = DATA_BUF_CLEAN;
 	}
+
+	/*
+	// Yingjia's version (Flush whole stripe)
+	if (curWriteIdx % SLICE_PER_STRIPE == 0){
+		unsigned int evictEntryStart = ZNS_DATA_BUFFER_ENTRY_START + (bufferID * DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE) + (curWriteIdx + (DATA_BUFFER_STRIPE_PER_OPEN_ZONE - 1) * SLICE_PER_STRIPE) % DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE;
+		int i;
+		for(i = 0; i < SLICE_PER_STRIPE; i++){
+			dataBufEntry = evictEntryStart + i;
+			if(dataBufMapPtr->dataBuf[dataBufEntry].dirty == DATA_BUF_DIRTY)
+			{
+				//xil_printf("Evict DataBufEntry : %d, SliceAddr : 0x%x\r\n", dataBufEntry, dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr);
+				reqSlotTag = GetFromFreeReqQ();
+				virtualSliceAddr = ZNS_AddrTransWrite(zoneID, dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr);
+
+				reqPoolPtr->reqPool[reqSlotTag].reqType = REQ_TYPE_NAND;
+				reqPoolPtr->reqPool[reqSlotTag].reqCode = REQ_CODE_WRITE;
+				reqPoolPtr->reqPool[reqSlotTag].nvmeCmdSlotTag = reqPoolPtr->reqPool[originReqSlotTag].nvmeCmdSlotTag;
+				reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr = dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr;
+				reqPoolPtr->reqPool[reqSlotTag].reqOpt.dataBufFormat = REQ_OPT_DATA_BUF_ENTRY;
+				reqPoolPtr->reqPool[reqSlotTag].reqOpt.nandAddr = REQ_OPT_NAND_ADDR_VSA;
+
+				reqPoolPtr->reqPool[reqSlotTag].reqOpt.nandEcc = REQ_OPT_NAND_ECC_ON;
+				reqPoolPtr->reqPool[reqSlotTag].reqOpt.nandEccWarning = REQ_OPT_NAND_ECC_WARNING_ON;
+				reqPoolPtr->reqPool[reqSlotTag].reqOpt.rowAddrDependencyCheck = REQ_OPT_ROW_ADDR_DEPENDENCY_CHECK;
+				reqPoolPtr->reqPool[reqSlotTag].reqOpt.blockSpace = REQ_OPT_BLOCK_SPACE_MAIN;
+				reqPoolPtr->reqPool[reqSlotTag].dataBufInfo.entry = dataBufEntry;
+				UpdateDataBufEntryInfoBlockingReq(dataBufEntry, reqSlotTag);
+				reqPoolPtr->reqPool[reqSlotTag].nandInfo.virtualSliceAddr = virtualSliceAddr;
+
+				SelectLowLevelReqQ(reqSlotTag);
+
+				dataBufMapPtr->dataBuf[dataBufEntry].dirty = DATA_BUF_CLEAN;
+			}
+		}
+	}
+	*/
 }
 
 void ZNS_EvictAllDataBufEntry(unsigned int zoneID, unsigned int originReqSlotTag){
