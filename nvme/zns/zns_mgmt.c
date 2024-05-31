@@ -172,6 +172,8 @@ void resetZone(unsigned int zoneId){
         innerBlockNo++;
     }
 
+    validBlockGroupFifo_Enqueue(zoneReg.Phy_Block_Group_ID);
+
     resetWriteBufferReg(zoneBufferID);
     if(zoneReg.Buffer_ID != -1)
         bufferIDFifo_Enqueue(zoneReg.Buffer_ID);
