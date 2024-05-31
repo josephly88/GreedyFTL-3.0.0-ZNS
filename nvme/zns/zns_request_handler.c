@@ -52,7 +52,7 @@ void InitZNS()
 	for(i = 0; i < MAXIMUM_OPEN_ZONE_COUNT; i++){
 		zoneWriteBufMapPtr->FIFO_LIST[i] = i;
 		zoneWriteBufMapPtr->zoneWriteBufReg[i].ZoneID = -1;
-		zoneWriteBufMapPtr->zoneWriteBufReg[i].curWriteIdx = 0;
+		zoneWriteBufMapPtr->zoneWriteBufReg[i].curWriteIdx = -1;
 	}
 	zoneWriteBufMapPtr->Head = 0;
 	zoneWriteBufMapPtr->Rear = MAXIMUM_OPEN_ZONE_COUNT - 1;
