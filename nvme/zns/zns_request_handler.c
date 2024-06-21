@@ -242,6 +242,8 @@ int ZoneWriteCheck(unsigned int zoneID, unsigned int slba, unsigned int nlb){
 
 	// Out-of-Bound Check
 	if(zoneReg.Write_Pointer + nlb > zoneReg.SLBA + NVME_BLOCKS_PER_ZONE){
+		if(zoneReg.Zone_State == EMPTY)
+			xil_printf("Zone %d is in EMPTY state\r\n", zoneID);
 		xil_printf("Out-of-Bound Error: WP: %x SLBA: %x nlb+1 : %d\r\n", zoneReg.Write_Pointer, slba, nlb);
 		return -1;
 	}
