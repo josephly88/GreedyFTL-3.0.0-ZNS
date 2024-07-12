@@ -468,20 +468,20 @@ void ZNS_ReqTransSliceToLowLevel(unsigned int reqSlotTag){
 		dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr = reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr;
 		PutToDataBufHashList(dataBufEntry);
 
-		if(reqPoolPtr->reqPool[reqSlotTag].reqCode  == REQ_CODE_READ)
+		if(reqPoolPtr->reqPool[reqSlotTag].reqCode  == REQ_CODE_ZONE_READ)
 			ZNS_DataReadFromNand(zoneID, reqSlotTag);
-		else if(reqPoolPtr->reqPool[reqSlotTag].reqCode  == REQ_CODE_WRITE)
+		else if(reqPoolPtr->reqPool[reqSlotTag].reqCode  == REQ_CODE_ZONE_WRITE)
 			if(reqPoolPtr->reqPool[reqSlotTag].nvmeDmaInfo.numOfNvmeBlock != NVME_BLOCKS_PER_SLICE) //for read modify write
 				ZNS_DataReadFromNand(zoneID, reqSlotTag);
 	}
 
 	//transform this slice request to nvme request
-	if(reqPoolPtr->reqPool[reqSlotTag].reqCode  == REQ_CODE_WRITE)
+	if(reqPoolPtr->reqPool[reqSlotTag].reqCode  == REQ_CODE_ZONE_WRITE)
 	{
 		dataBufMapPtr->dataBuf[dataBufEntry].dirty = DATA_BUF_DIRTY;
 		reqPoolPtr->reqPool[reqSlotTag].reqCode = REQ_CODE_RxDMA;
 	}
-	else if(reqPoolPtr->reqPool[reqSlotTag].reqCode  == REQ_CODE_READ)
+	else if(reqPoolPtr->reqPool[reqSlotTag].reqCode  == REQ_CODE_ZONE_READ)
 		reqPoolPtr->reqPool[reqSlotTag].reqCode = REQ_CODE_TxDMA;
 	else
 		assert(!"[WARNING] Not supported reqCode. [WARNING]");
