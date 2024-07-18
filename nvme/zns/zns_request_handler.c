@@ -592,23 +592,19 @@ void ZNS_DataReadFromNand(unsigned int zoneID, unsigned int originReqSlotTag)
 unsigned int ZNS_AddrTransWrite(unsigned int zoneID, unsigned int logicalSliceAddr){
 	unsigned int BLOCK_GROUP_ID, virtualSliceAddr, dieNo, innerBlockNo, outerBlockNo, blockNo, pageNo;
 
-	ZONE_REG zoneReg = zoneMapPtr->zoneReg[zoneID];
+	BLOCK_GROUP_ID = zoneMapPtr->zoneReg[zoneID].Phy_Block_Group_ID;
 
-	BLOCK_GROUP_ID = zoneReg.Phy_Block_Group_ID;
-
-	dieNo = ((BLOCK_GROUP_ID % BLOCK_GROUP_IN_COLUMN) * NUM_OF_DIE_PER_ZONE) + (zoneReg.Cur_Phy_Idx % NUM_OF_DIE_PER_ZONE);
+	dieNo = ((BLOCK_GROUP_ID % BLOCK_GROUP_IN_COLUMN) * NUM_OF_DIE_PER_ZONE) + (zoneMapPtr->zoneReg[zoneID].Cur_Phy_Idx % NUM_OF_DIE_PER_ZONE);
 	if(CHANNEL_WAY_ORIENTED == 1){
 		dieNo = ((dieNo % 8) * 8) + (dieNo / 8);
 	}
 
-	pageNo = (zoneReg.Cur_Phy_Idx / NUM_OF_DIE_PER_ZONE) % (SLICES_PER_BLOCK);
+	pageNo = (zoneMapPtr->zoneReg[zoneID].Cur_Phy_Idx / NUM_OF_DIE_PER_ZONE) % (SLICES_PER_BLOCK);
 
-	innerBlockNo = (zoneReg.Cur_Phy_Idx / (NUM_OF_DIE_PER_ZONE * SLICES_PER_BLOCK)) % (NUM_OF_BLOCK_PER_ZONE);
+	innerBlockNo = (zoneMapPtr->zoneReg[zoneID].Cur_Phy_Idx / (NUM_OF_DIE_PER_ZONE * SLICES_PER_BLOCK)) % (NUM_OF_BLOCK_PER_ZONE);
 	outerBlockNo = BLOCK_GROUP_ID / BLOCK_GROUP_IN_COLUMN;
 
 	blockNo = outerBlockNo * NUM_OF_BLOCK_PER_ZONE + innerBlockNo;
-
-	//xil_printf("ZNS_AddrTrans: lsa: %x, zoneID: %d, BufferID: %d, blockNo: %d, pageNo: %d, wayNo: %d, chNo: %d\r\n", lsa, zoneID, zoneMapPtr->zoneReg[zoneID].Buffer_ID, vsaPtr->blockNo, vsaPtr->pageNo, vsaPtr->wayNo, vsaPtr->chNo);
 
 	virtualSliceAddr = Vorg2VsaTranslation(dieNo, blockNo, pageNo);
 	virtualBlockMapPtr->block[dieNo][blockNo].currentPage++;
@@ -617,11 +613,13 @@ unsigned int ZNS_AddrTransWrite(unsigned int zoneID, unsigned int logicalSliceAd
 	virtualSliceMapPtr->virtualSlice[virtualSliceAddr].logicalSliceAddr = logicalSliceAddr;
 	zoneMapPtr->zoneReg[zoneID].Cur_Phy_Idx++;
 
+	//xil_printf("ZNS_AddrTrans: lsa: %x -> vsa: %x, zoneID: %d, BufferID: %d, blockNo: %d, pageNo: %d, dieNo: %d\r\n", logicalSliceAddr, virtualSliceAddr, zoneID, zoneMapPtr->zoneReg[zoneID].Buffer_ID, blockNo, pageNo, dieNo);
+
 	return virtualSliceAddr;
 }
 
 unsigned int ZNS_AddrTransRead(unsigned int logicalSliceAddr){
-
+	
 	unsigned int virtualSliceAddr;
 
 	if(logicalSliceAddr < SLICES_PER_SSD)
@@ -635,6 +633,4 @@ unsigned int ZNS_AddrTransRead(unsigned int logicalSliceAddr){
 	}
 	else
 		assert(!"[WARNING] Logical address is larger than maximum logical address served by SSD [WARNING]");
-
-	return virtualSliceAddr;
 }
