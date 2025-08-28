@@ -41,6 +41,10 @@ void SelectiveGetFromZoneDataBufHashList(unsigned int bufEntry);
 
 void ZNS_ReqTransSliceToLowLevel(unsigned int reqSlotTag);
 
+unsigned int ZNS_AllocateWriteDataBuf(unsigned int zoneID, unsigned int reqSlotTag);
+
+unsigned int ZNS_AllocateReadDataBuf(unsigned int zoneID, unsigned int reqSlotTag);
+
 void ZNS_EvictDataBufEntry(unsigned int zoneID, unsigned int originReqSlotTag);
 
 void ZNS_EvictAllDataBufEntry(unsigned int zoneID, unsigned int originReqSlotTag);

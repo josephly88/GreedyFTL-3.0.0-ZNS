@@ -14,17 +14,19 @@
 // Column Group: 1-64 (Must be a factor of 64 (USER_DIES). E.g., 64 / 4 = 16 that has no remainder)
 #define NUM_OF_DIE_PER_ZONE									64
 
+#define SLICE_PER_STRIPE									(NUM_OF_DIE_PER_ZONE)
+
 #define MAXIMUM_OPEN_ZONE_COUNT                  			20
-#define MAXIMUM_ACTIVE_ZONE_COUNT                  			40
+#define MAXIMUM_ACTIVE_ZONE_COUNT                  			20
 #define ZNS_LBA_START_NVME_BLOCK							0x800000	// 0x800000 * 0x1000 (NVMe Block Size: 4KB) = 32GB
 
 // 0-Channel Oriented, 1-Way Oriented
 #define CHANNEL_WAY_ORIENTED								0
 // 0-Disable, 1-Enable
-#define BLOCK_SHUFFLE_ENABLE								1
+#define BLOCK_SHUFFLE_ENABLE								0
 
 // Each Stripe is NUM_OF_DIE_PER_ZONE
-#define DATA_BUFFER_STRIPE_PER_OPEN_ZONE					2
+#define ADDITION_DATA_BUFFER_PER_OPEN_ZONE					(0)	// 2-stripe would be (SLICE_PER_STRIPE)
 // Each Entry is a slice (16KB)
 #define ACTIVE_ZONE_READ_BUFFER_ENTRY_COUNT					(20 * 64)		
 // Flash buffer pre-fetch (Amount)
@@ -51,8 +53,7 @@
 #define ZNS_LSA_END											(ZNS_LBA_END_NVME_BLOCK / NVME_BLOCKS_PER_SLICE)
 
 /* Zone Data Buffer Range */
-#define SLICE_PER_STRIPE									(NUM_OF_DIE_PER_ZONE)
-#define DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE				(SLICE_PER_STRIPE * DATA_BUFFER_STRIPE_PER_OPEN_ZONE)
+#define DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE				(SLICE_PER_STRIPE + ADDITION_DATA_BUFFER_PER_OPEN_ZONE)
 #define ZNS_DATA_BUFFER_ENTRY_START							(AVAILABLE_DATA_BUFFER_ENTRY_COUNT)
 
 #define OPEN_ZONE_DATA_BUFFER_ENTRY_COUNT					(MAXIMUM_OPEN_ZONE_COUNT * DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE)
@@ -108,7 +109,7 @@ typedef struct _VALID_BLOCK_GROUP_FIFO
 typedef struct _ZONE_WRITE_BUF_REG
 {
 	int ZoneID;
-	int curWriteIdx;
+	int curBufWriteIdx;
 } ZONE_WRITE_BUF_REG;
 
 typedef struct _ZONE_WRITE_BUFFER_MAP
