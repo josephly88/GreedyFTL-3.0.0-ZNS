@@ -550,7 +550,7 @@ void ZNS_EvictDataBufEntry(unsigned int zoneID, unsigned int originReqSlotTag){
 
 	// Ping-Pong Buffer, Flash write the next row buffer if it is dirty
 	// Evict next (N/2)
-	int evictIdx = (curBufWriteIdx + (DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE / 2)) % DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE;
+	int evictIdx = (curBufWriteIdx + (EVICTION_OFFSET + DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE)) % DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE;
 
 	dataBufEntry = ZNS_DATA_BUFFER_ENTRY_START + (bufferID * DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE) + evictIdx;
 	if(dataBufMapPtr->dataBuf[dataBufEntry].dirty == DATA_BUF_DIRTY)

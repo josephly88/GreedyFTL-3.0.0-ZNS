@@ -26,9 +26,14 @@
 #define BLOCK_SHUFFLE_ENABLE								0
 
 // Each Stripe is NUM_OF_DIE_PER_ZONE
-#define ADDITION_DATA_BUFFER_PER_OPEN_ZONE					(0)	// 2-stripe would be (SLICE_PER_STRIPE)
+#define ADDITION_DATA_BUFFER_PER_OPEN_ZONE					(32)	// 2-stripe would be (SLICE_PER_STRIPE)
+#define EVICTION_OFFSET										(-1)
+// Options: 
+	//-1: 													Last
+	//DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE/2:				N/2 Ping-Pong
+
 // Each Entry is a slice (16KB)
-#define ACTIVE_ZONE_READ_BUFFER_ENTRY_COUNT					(20 * 64)		
+#define ACTIVE_ZONE_READ_BUFFER_ENTRY_COUNT					(64)		
 // Flash buffer pre-fetch (Amount)
 #define FLASH_BATCH_READ									0
 
