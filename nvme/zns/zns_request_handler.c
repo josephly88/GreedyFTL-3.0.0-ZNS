@@ -14,6 +14,7 @@
 P_ZONE_MAP zoneMapPtr;
 P_VALID_BLOCK_GROUP_FIFO validBlockGroupFifoPtr;
 P_ZONE_WRITE_BUFFER_MAP zoneWriteBufMapPtr;
+P_UNI_BUF_REG uniBufRegPtr;
 
 // Bad block tuples (Assume the tuples are sorted and not overlapped)
 // {4052, 4057} means virtual blocks 4052 - 4057 are bad blocks
@@ -36,6 +37,14 @@ void InitZNS()
 	eliminateBadBlockGroups();
 	shuffleValidBlockGroups();
 	validBlockGroupFifoPtr->Num = validBlockGroupFifoPtr->Valid_Count;
+
+	if(PER_ZONE_BUFFER == 0){
+		uniBufRegPtr = (P_UNI_BUF_REG) UNI_BUF_REG_ADDR;
+		int i;
+		for(i = 0; i < MAXIMUM_OPEN_ZONE_COUNT; i++)
+			uniBufRegPtr->LAST_BUF[i] = -1;
+		uniBufRegPtr->curBufWriteIdx = -1;
+	}
 	
 	zoneMapPtr = (P_ZONE_MAP) ZONE_MAP_ADDR;
 
@@ -255,9 +264,16 @@ int ZoneWriteCheck(unsigned int zoneID, unsigned int slba, unsigned int nlb){
 		zoneMapPtr->zoneReg[zoneID].Zone_State = IMPLICITLY_OPENED;
 		zoneMapPtr->Num_Open_Zone++;
 
-		int bufferID = bufferIDFifo_Dequeue();
+		int bufferID;
+		
+		if(PER_ZONE_BUFFER == 1){
+			bufferID = bufferIDFifo_Dequeue();			
+			zoneWriteBufMapPtr->zoneWriteBufReg[bufferID].ZoneID = zoneID;
+		}
+		else{
+			bufferID = 0;
+		}		
 		zoneMapPtr->zoneReg[zoneID].Buffer_ID = bufferID;
-		zoneWriteBufMapPtr->zoneWriteBufReg[bufferID].ZoneID = zoneID;
 		zoneMapPtr->zoneReg[zoneID].Phy_Block_Group_ID = validBlockGroupFifo_Dequeue();
 		//xil_printf("Zone %d (Block Group %d) is implicitly opened\r\n", zoneMapPtr->zoneReg[zoneRegID].Zone_ID, zoneMapPtr->zoneReg[zoneRegID].Phy_Block_Group_ID);
 	}
@@ -292,16 +308,27 @@ int ZoneReadCheck(unsigned int zoneID, unsigned int slba, unsigned int nlb){
 }
 
 unsigned int GetZoneDataBuf(unsigned int zoneID, int offset){
-	int bufferID = zoneMapPtr->zoneReg[zoneID].Buffer_ID;
-	int curBufWriteIdx = zoneWriteBufMapPtr->zoneWriteBufReg[bufferID].curBufWriteIdx;
-	unsigned int off_idx = (curBufWriteIdx + offset + DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE) % DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE;
-	return ZNS_DATA_BUFFER_ENTRY_START + (bufferID * DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE) + off_idx;
+	if(PER_ZONE_BUFFER == 1){
+		int bufferID = zoneMapPtr->zoneReg[zoneID].Buffer_ID;
+		int curBufWriteIdx = zoneWriteBufMapPtr->zoneWriteBufReg[bufferID].curBufWriteIdx;
+		unsigned int off_idx = (curBufWriteIdx + offset + DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE) % DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE;
+		return ZNS_DATA_BUFFER_ENTRY_START + (bufferID * DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE) + off_idx;
+	}
+	else{
+		return uniBufRegPtr->curBufWriteIdx;
+	}
 }
 
 void incrementDataBufPointer(unsigned int zoneID){
-	int bufferID = zoneMapPtr->zoneReg[zoneID].Buffer_ID;
-	int curBufWriteIdx = zoneWriteBufMapPtr->zoneWriteBufReg[bufferID].curBufWriteIdx;
-	zoneWriteBufMapPtr->zoneWriteBufReg[bufferID].curBufWriteIdx = (curBufWriteIdx + 1) % DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE;
+	if(PER_ZONE_BUFFER == 1){
+		int bufferID = zoneMapPtr->zoneReg[zoneID].Buffer_ID;
+		int curBufWriteIdx = zoneWriteBufMapPtr->zoneWriteBufReg[bufferID].curBufWriteIdx;
+		zoneWriteBufMapPtr->zoneWriteBufReg[bufferID].curBufWriteIdx = (curBufWriteIdx + 1) % DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE;
+	}
+	else{
+		int curBufWriteIdx = uniBufRegPtr->curBufWriteIdx;
+		uniBufRegPtr->curBufWriteIdx = (curBufWriteIdx + 1) % OPEN_ZONE_DATA_BUFFER_ENTRY_COUNT;
+	}
 }
 
 unsigned int checkZoneWriteDataBuf(unsigned int reqSlotTag, unsigned int zoneID){
@@ -312,7 +339,7 @@ unsigned int checkZoneWriteDataBuf(unsigned int reqSlotTag, unsigned int zoneID)
 	unsigned int LatestdataBufEntry = GetZoneDataBuf(zoneID, 0);
 	unsigned int slice_diff = dataBufMapPtr->dataBuf[LatestdataBufEntry].logicalSliceAddr - reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr;
 
-	if(slice_diff < DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE / 2){
+	if(slice_diff < -EVICTION_OFFSET){
 		unsigned int dataBufEntry = GetZoneDataBuf(zoneID, -slice_diff);
 		if(dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr == reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr){
 			//xil_printf("\tHit: Slice_diff : %d\r\n", slice_diff);
@@ -513,15 +540,31 @@ unsigned int ZNS_AllocateWriteDataBuf(unsigned int zoneID, unsigned int reqSlotT
 	//xil_printf("Catch a ZNS Request LogicalSliceAddr : 0x%x, zone ID : %d \r\n", reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr, zoneID);
 	
 	// In case write smaller than a slice which can fit the last buffer
-	bufferID = zoneMapPtr->zoneReg[zoneID].Buffer_ID;
-	last_dataBufEntry = GetZoneDataBuf(zoneID, 0);
-	if(zoneWriteBufMapPtr->zoneWriteBufReg[bufferID].curBufWriteIdx >= 0 &&
-		dataBufMapPtr->dataBuf[last_dataBufEntry].logicalSliceAddr == reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr){
-		dataBufEntry = last_dataBufEntry;
+	if(PER_ZONE_BUFFER == 1){
+		bufferID = zoneMapPtr->zoneReg[zoneID].Buffer_ID;
+		last_dataBufEntry = GetZoneDataBuf(zoneID, 0);
+		if(zoneWriteBufMapPtr->zoneWriteBufReg[bufferID].curBufWriteIdx >= 0
+			&& dataBufMapPtr->dataBuf[last_dataBufEntry].logicalSliceAddr == reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr){
+			dataBufEntry = last_dataBufEntry;
+		}
+		else{
+			incrementDataBufPointer(zoneID);
+			dataBufEntry = GetZoneDataBuf(zoneID, 0);
+		}
 	}
 	else{
-		incrementDataBufPointer(zoneID);
-		dataBufEntry = GetZoneDataBuf(zoneID, 0);
+		last_dataBufEntry = uniBufRegPtr->LAST_BUF[zoneID];
+		if(last_dataBufEntry >= 0
+			&& dataBufMapPtr->dataBuf[last_dataBufEntry].logicalSliceAddr == reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr){
+			dataBufEntry = last_dataBufEntry;
+		}
+		else{
+			incrementDataBufPointer(zoneID);
+			dataBufEntry = GetZoneDataBuf(zoneID, 0);
+			if(last_dataBufEntry == -1){
+				uniBufRegPtr->LAST_BUF[zoneID] = dataBufEntry;
+			}
+		}
 	}
 
 	return dataBufEntry;
@@ -545,14 +588,25 @@ unsigned int ZNS_AllocateReadDataBuf(unsigned int zoneID, unsigned int reqSlotTa
 void ZNS_EvictDataBufEntry(unsigned int zoneID, unsigned int originReqSlotTag){
 	unsigned int reqSlotTag, virtualSliceAddr, dataBufEntry;
 
-	int bufferID = zoneMapPtr->zoneReg[zoneID].Buffer_ID;
-	int curBufWriteIdx = zoneWriteBufMapPtr->zoneWriteBufReg[bufferID].curBufWriteIdx;
+	if(PER_ZONE_BUFFER){		
+		int bufferID = zoneMapPtr->zoneReg[zoneID].Buffer_ID;
+		int curBufWriteIdx = zoneWriteBufMapPtr->zoneWriteBufReg[bufferID].curBufWriteIdx;
 
-	// Ping-Pong Buffer, Flash write the next row buffer if it is dirty
-	// Evict next (N/2)
-	int evictIdx = (curBufWriteIdx + (EVICTION_OFFSET + DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE)) % DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE;
+		// Ping-Pong Buffer, Flash write the next row buffer if it is dirty
+		// Evict next (N/2)
+		int evictIdx = (curBufWriteIdx + (EVICTION_OFFSET + DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE)) % DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE;
 
-	dataBufEntry = ZNS_DATA_BUFFER_ENTRY_START + (bufferID * DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE) + evictIdx;
+		dataBufEntry = ZNS_DATA_BUFFER_ENTRY_START + (bufferID * DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE) + evictIdx;
+	}
+	else{
+		if(reqPoolPtr->reqPool[originReqSlotTag].dataBufInfo.entry == uniBufRegPtr->LAST_BUF[zoneID])
+			return;
+		else{
+			dataBufEntry = uniBufRegPtr->LAST_BUF[zoneID];
+			uniBufRegPtr->LAST_BUF[zoneID] = reqPoolPtr->reqPool[originReqSlotTag].dataBufInfo.entry;
+		}
+	}
+
 	if(dataBufMapPtr->dataBuf[dataBufEntry].dirty == DATA_BUF_DIRTY)
 	{
 		reqSlotTag = GetFromFreeReqQ();

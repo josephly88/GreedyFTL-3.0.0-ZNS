@@ -26,11 +26,12 @@
 #define BLOCK_SHUFFLE_ENABLE								0
 
 // Each Stripe is NUM_OF_DIE_PER_ZONE
-#define ADDITION_DATA_BUFFER_PER_OPEN_ZONE					(32)	// 2-stripe would be (SLICE_PER_STRIPE)
-#define EVICTION_OFFSET										(-1)
-// Options: 
-	//-1: 													Last
-	//DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE/2:				N/2 Ping-Pong
+
+// 0: Unifed buffer, 1: Per-Zone buffer
+#define PER_ZONE_BUFFER										(0)		
+#define ADDITION_DATA_BUFFER_PER_OPEN_ZONE					(0)	// 2-stripe would be (SLICE_PER_STRIPE)
+// Options: -1 (Last), N/2 (N/2 Ping-Pong)
+#define EVICTION_OFFSET										(-1)    
 
 // Each Entry is a slice (16KB)
 #define ACTIVE_ZONE_READ_BUFFER_ENTRY_COUNT					(64)		
@@ -125,6 +126,12 @@ typedef struct _ZONE_WRITE_BUFFER_MAP
 	int Rear;	// Tail of FIFO
 	int Num;
 } ZONE_WRITE_BUFFER_MAP, *P_ZONE_WRITE_BUFFER_MAP;
+
+typedef struct _UNI_BUF_REG
+{
+	int LAST_BUF[MAXIMUM_OPEN_ZONE_COUNT];
+	int curBufWriteIdx;
+} UNI_BUF_REG, *P_UNI_BUF_REG;
 
 /*-------------------------------------------------------------
 		Section : NVMe ZNS Command Specification

@@ -139,14 +139,22 @@ void handle_zns_reset_zone(IO_ZNS_ZONE_MANGAEMENT_SEND_DW13 mgmtSendInfo, unsign
 
 void resetZone(unsigned int zoneId){
     P_ZONE_MAP zoneMapPtr = (P_ZONE_MAP) ZONE_MAP_ADDR;
+    P_UNI_BUF_REG uniBufRegPtr = (P_UNI_BUF_REG) UNI_BUF_REG_ADDR;
     int BufferIdx, DieIdx;
     ZONE_REG zoneReg = zoneMapPtr->zoneReg[zoneId];
     int zoneBufferID = zoneReg.Buffer_ID;
 
     // Clear all write buffers
-    for(BufferIdx = 0; BufferIdx < DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE; BufferIdx++){
-        unsigned int dataBufEntry = ZNS_DATA_BUFFER_ENTRY_START + (zoneBufferID * DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE) + BufferIdx;
-        dataBufMapPtr->dataBuf[dataBufEntry].dirty = DATA_BUF_CLEAN;
+    if(PER_ZONE_BUFFER == 1){
+        for(BufferIdx = 0; BufferIdx < DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE; BufferIdx++){
+            unsigned int dataBufEntry = ZNS_DATA_BUFFER_ENTRY_START + (zoneBufferID * DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE) + BufferIdx;
+            dataBufMapPtr->dataBuf[dataBufEntry].dirty = DATA_BUF_CLEAN;
+        }
+    }
+    else{
+        int lastBufIdx = uniBufRegPtr->LAST_BUF[zoneId];
+        if(lastBufIdx >= 0)
+            dataBufMapPtr->dataBuf[lastBufIdx].dirty = DATA_BUF_CLEAN;
     }
 
     int WrittenSize = zoneReg.Write_Pointer - zoneReg.SLBA;
@@ -175,7 +183,7 @@ void resetZone(unsigned int zoneId){
     validBlockGroupFifo_Enqueue(zoneReg.Phy_Block_Group_ID);
 
     resetWriteBufferReg(zoneBufferID);
-    if(zoneReg.Buffer_ID != -1)
+    if(PER_ZONE_BUFFER == 1 && zoneReg.Buffer_ID != -1)
         bufferIDFifo_Enqueue(zoneReg.Buffer_ID);
 
     resetZoneReg(zoneId);
