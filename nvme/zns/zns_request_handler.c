@@ -553,6 +553,15 @@ unsigned int ZNS_AllocateWriteDataBuf(unsigned int zoneID, unsigned int reqSlotT
 		}
 	}
 	else{
+		// TO-DO: 
+		// 1. Dividing buffer using % channel, tracking each part as queue using head, tail, number
+		// 2. For ZNS_AllocateWriteDataBuf(): 
+		//			Use the channel id to find the right buffer queue
+		//			if the tail is the last buffer, use it
+		// 			else increment the tail by the queue, use it
+		// 3. For ZNS_EvictDataBufEntry():
+		//			For each channel queue, evict the head of each queue if not empty
+
 		last_dataBufEntry = uniBufRegPtr->LAST_BUF[zoneID];
 		if(last_dataBufEntry >= 0
 			&& dataBufMapPtr->dataBuf[last_dataBufEntry].logicalSliceAddr == reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr){
