@@ -23,6 +23,8 @@ unsigned int bufferIDFifo_Dequeue();
 
 void bufferIDFifo_Enqueue(unsigned int element);
 
+int bufferQueue_Enqueue(unsigned int chNo);
+
 int ZoneWriteCheck(unsigned int zoneID, unsigned int slba, unsigned int numOfSlice);
 
 int ZoneReadCheck(unsigned int zoneID, unsigned int slba, unsigned int nlb);

@@ -145,7 +145,7 @@ void resetZone(unsigned int zoneId){
     int zoneBufferID = zoneReg.Buffer_ID;
 
     // Clear all write buffers
-    if(PER_ZONE_BUFFER == 1){
+    if(BUFFER_MODE == 0){
         for(BufferIdx = 0; BufferIdx < DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE; BufferIdx++){
             unsigned int dataBufEntry = ZNS_DATA_BUFFER_ENTRY_START + (zoneBufferID * DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE) + BufferIdx;
             dataBufMapPtr->dataBuf[dataBufEntry].dirty = DATA_BUF_CLEAN;
@@ -183,7 +183,7 @@ void resetZone(unsigned int zoneId){
     validBlockGroupFifo_Enqueue(zoneReg.Phy_Block_Group_ID);
 
     resetWriteBufferReg(zoneBufferID);
-    if(PER_ZONE_BUFFER == 1 && zoneReg.Buffer_ID != -1)
+    if(BUFFER_MODE == 0 && zoneReg.Buffer_ID != -1)
         bufferIDFifo_Enqueue(zoneReg.Buffer_ID);
 
     resetZoneReg(zoneId);

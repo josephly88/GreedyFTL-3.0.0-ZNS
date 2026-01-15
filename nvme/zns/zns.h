@@ -27,8 +27,8 @@
 
 // Each Stripe is NUM_OF_DIE_PER_ZONE
 
-// 0: Unifed buffer, 1: Per-Zone buffer
-#define PER_ZONE_BUFFER										(0)		
+// 0: Per-zone, 1: Unified, 2: Unified PU-Aware
+#define BUFFER_MODE											(0)		
 #define ADDITION_DATA_BUFFER_PER_OPEN_ZONE					(0)	// 2-stripe would be (SLICE_PER_STRIPE)
 // Options: -1 (Last), N/2 (N/2 Ping-Pong)
 #define EVICTION_OFFSET										(-1)    
@@ -63,6 +63,7 @@
 #define ZNS_DATA_BUFFER_ENTRY_START							(AVAILABLE_DATA_BUFFER_ENTRY_COUNT)
 
 #define OPEN_ZONE_DATA_BUFFER_ENTRY_COUNT					(MAXIMUM_OPEN_ZONE_COUNT * DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE)
+#define BUFFER_QUEUE_DEPTH									(OPEN_ZONE_DATA_BUFFER_ENTRY_COUNT / 8)
 
 #define ZONE_BLOCK_GROUP_START								(ZNS_LBA_START_NVME_BLOCK / NVME_BLOCKS_PER_ZONE)
 
@@ -132,6 +133,18 @@ typedef struct _UNI_BUF_REG
 	int LAST_BUF[MAXIMUM_OPEN_ZONE_COUNT];
 	int curBufWriteIdx;
 } UNI_BUF_REG, *P_UNI_BUF_REG;
+
+typedef struct _BUFFER_QUEUE_REG
+{
+	int Head;
+	int Rear;
+	int Num;
+} BUFFER_QUEUE_REG, *P_BUFFER_QUEUE_REG;
+
+typedef struct _BUFFER_QUEUE_MAP
+{
+	BUFFER_QUEUE_REG bufferQueueReg[8];
+} BUFFER_QUEUE_MAP, *P_BUFFER_QUEUE_MAP;
 
 /*-------------------------------------------------------------
 		Section : NVMe ZNS Command Specification
