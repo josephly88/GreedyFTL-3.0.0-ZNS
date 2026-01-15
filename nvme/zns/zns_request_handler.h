@@ -23,6 +23,12 @@ unsigned int bufferIDFifo_Dequeue();
 
 void bufferIDFifo_Enqueue(unsigned int element);
 
+int chNo_Cal(unsigned int zoneID, unsigned int requestSlotTag);
+
+int bufferQueue_Enqueue(unsigned int chNo);
+
+void bufferQueue_Dequeue(unsigned int chNo);
+
 int ZoneWriteCheck(unsigned int zoneID, unsigned int slba, unsigned int numOfSlice);
 
 int ZoneReadCheck(unsigned int zoneID, unsigned int slba, unsigned int nlb);
