@@ -245,7 +245,7 @@ int chNo_Cal(unsigned int zoneID, unsigned int requestSlotTag){
 
 	sliceID = reqPoolPtr->reqPool[requestSlotTag].logicalSliceAddr - (zoneID * SLICE_PER_ZONE);
 	BLOCK_GROUP_ID = zoneMapPtr->zoneReg[zoneID].Phy_Block_Group_ID;
-	chNo = ((BLOCK_GROUP_ID % BLOCK_GROUP_IN_COLUMN) * NUM_OF_DIE_PER_ZONE) + (sliceID % NUM_OF_DIE_PER_ZONE) % 8;
+	chNo = (((BLOCK_GROUP_ID % BLOCK_GROUP_IN_COLUMN) * NUM_OF_DIE_PER_ZONE) + (sliceID % NUM_OF_DIE_PER_ZONE)) % 8;
 
 	return chNo;
 }
@@ -256,6 +256,8 @@ int bufferQueue_Enqueue(unsigned int chNo){
 			bufferQueueMapPtr->bufferQueueReg[chNo].Head = (bufferQueueMapPtr->bufferQueueReg[chNo].Head + 1) % BUFFER_QUEUE_DEPTH;
 		bufferQueueMapPtr->bufferQueueReg[chNo].Rear = (bufferQueueMapPtr->bufferQueueReg[chNo].Rear + 1) % BUFFER_QUEUE_DEPTH;
 		bufferQueueMapPtr->bufferQueueReg[chNo].Num += 1;
+
+		xil_printf("Buffer Queue Enqueue: CH %d, Num %d\r\n", chNo, bufferQueueMapPtr->bufferQueueReg[chNo].Num);
 	}
 	else
 		assert(!"[WARNING] Buffer Queue Full! [WARNING]");
@@ -265,8 +267,10 @@ int bufferQueue_Enqueue(unsigned int chNo){
 
 void bufferQueue_Dequeue(unsigned int chNo){
 	if(bufferQueueMapPtr->bufferQueueReg[chNo].Num > 0){
-		bufferQueueMapPtr->bufferQueueReg[chNo].Rear = (bufferQueueMapPtr->bufferQueueReg[chNo].Rear - 1 + BUFFER_QUEUE_DEPTH) % BUFFER_QUEUE_DEPTH;
+		bufferQueueMapPtr->bufferQueueReg[chNo].Rear = (bufferQueueMapPtr->bufferQueueReg[chNo].Rear + BUFFER_QUEUE_DEPTH - 1) % BUFFER_QUEUE_DEPTH;
 		bufferQueueMapPtr->bufferQueueReg[chNo].Num -= 1;
+
+		xil_printf("Buffer Queue Dequeue: CH %d, Num %d\r\n", chNo, bufferQueueMapPtr->bufferQueueReg[chNo].Num);
 	}
 	else
 		assert(!"[WARNING] Buffer Queue Empty! [WARNING]");
