@@ -95,7 +95,6 @@ void resetZoneReg(int ZoneID){
 	zoneMapPtr->zoneReg[ZoneID].Write_Pointer = zoneMapPtr->zoneReg[ZoneID].SLBA;
 	zoneMapPtr->zoneReg[ZoneID].Buffer_ID = -1;
 	zoneMapPtr->zoneReg[ZoneID].Phy_Block_Group_ID = -1;
-	zoneMapPtr->zoneReg[ZoneID].Cur_Phy_Idx = 0;
 }
 
 void resetWriteBufferReg(int BufferID){
@@ -241,6 +240,16 @@ void bufferIDFifo_Enqueue(unsigned int element){
 	zoneWriteBufMapPtr->Num++;
 }
 
+int chNo_Cal(unsigned int zoneID, unsigned int requestSlotTag){
+	int sliceID, BLOCK_GROUP_ID, chNo;
+
+	sliceID = reqPoolPtr->reqPool[requestSlotTag].logicalSliceAddr - (zoneID * SLICE_PER_ZONE);
+	BLOCK_GROUP_ID = zoneMapPtr->zoneReg[zoneID].Phy_Block_Group_ID;
+	chNo = ((BLOCK_GROUP_ID % BLOCK_GROUP_IN_COLUMN) * NUM_OF_DIE_PER_ZONE) + (sliceID % NUM_OF_DIE_PER_ZONE) % 8;
+
+	return chNo;
+}
+
 int bufferQueue_Enqueue(unsigned int chNo){
 	if(bufferQueueMapPtr->bufferQueueReg[chNo].Num < BUFFER_QUEUE_DEPTH){
 		if(bufferQueueMapPtr->bufferQueueReg[chNo].Num == 0)
@@ -252,6 +261,15 @@ int bufferQueue_Enqueue(unsigned int chNo){
 		assert(!"[WARNING] Buffer Queue Full! [WARNING]");
 
 	return bufferQueueMapPtr->bufferQueueReg[chNo].Rear;
+}
+
+void bufferQueue_Dequeue(unsigned int chNo){
+	if(bufferQueueMapPtr->bufferQueueReg[chNo].Num > 0){
+		bufferQueueMapPtr->bufferQueueReg[chNo].Rear = (bufferQueueMapPtr->bufferQueueReg[chNo].Rear - 1 + BUFFER_QUEUE_DEPTH) % BUFFER_QUEUE_DEPTH;
+		bufferQueueMapPtr->bufferQueueReg[chNo].Num -= 1;
+	}
+	else
+		assert(!"[WARNING] Buffer Queue Empty! [WARNING]");
 }
 
 int ZoneWriteCheck(unsigned int zoneID, unsigned int slba, unsigned int nlb){
@@ -574,15 +592,6 @@ unsigned int ZNS_AllocateWriteDataBuf(unsigned int zoneID, unsigned int reqSlotT
 		}
 	}
 	else{
-		// TO-DO: 
-		// 1. Dividing buffer using % channel, tracking each part as queue using head, tail, number
-		// 2. For ZNS_AllocateWriteDataBuf(): 
-		//			Use the channel id to find the right buffer queue
-		//			if the tail is the last buffer, use it
-		// 			else increment the tail by the queue, use it
-		// 3. For ZNS_EvictDataBufEntry():
-		//			For each channel queue, evict the head of each queue if not empty
-
 		last_dataBufEntry = uniBufRegPtr->LAST_BUF[zoneID];
 		if(last_dataBufEntry >= 0
 			&& dataBufMapPtr->dataBuf[last_dataBufEntry].logicalSliceAddr == reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr){
@@ -594,12 +603,8 @@ unsigned int ZNS_AllocateWriteDataBuf(unsigned int zoneID, unsigned int reqSlotT
 				dataBufEntry = GetZoneDataBuf(zoneID, 0);
 			}
 			else{
-				int BLOCK_GROUP_ID, dieNo, chNo, rearNo;
-				// Find the Channel Number
-				BLOCK_GROUP_ID = zoneMapPtr->zoneReg[zoneID].Phy_Block_Group_ID;
-				dieNo = ((BLOCK_GROUP_ID % BLOCK_GROUP_IN_COLUMN) * NUM_OF_DIE_PER_ZONE) + (zoneMapPtr->zoneReg[zoneID].Cur_Phy_Idx % NUM_OF_DIE_PER_ZONE);
-				chNo = dieNo % 8;
-				//Enqueue
+				int chNo, rearNo;
+				chNo = chNo_Cal(zoneID, reqSlotTag);
 				rearNo = bufferQueue_Enqueue(chNo);
 				dataBufEntry = ZNS_DATA_BUFFER_ENTRY_START + (chNo * BUFFER_QUEUE_DEPTH) + rearNo;
 			}
@@ -647,9 +652,18 @@ void ZNS_EvictDataBufEntry(unsigned int zoneID, unsigned int originReqSlotTag){
 		}
 	}
 	else{
-		reqPoolPtr->reqPool[originReqSlotTag].dataBufInfo.entry;
+		int chNo, headNo, headBuffer;
+		chNo = chNo_Cal(zoneID, originReqSlotTag);
+		headNo = bufferQueueMapPtr->bufferQueueReg[chNo].Head;
+		headBuffer = ZNS_DATA_BUFFER_ENTRY_START + (chNo * BUFFER_QUEUE_DEPTH) + headNo;
 
-
+		unsigned int lastBuffer = uniBufRegPtr->LAST_BUF[zoneID];
+		if(lastBuffer == headBuffer && zoneMapPtr->zoneReg[zoneID].Zone_State != FULL)
+			return;
+		else{
+			dataBufEntry = headBuffer;
+			bufferQueue_Dequeue(chNo);
+		}
 	}
 
 	if(dataBufMapPtr->dataBuf[dataBufEntry].dirty == DATA_BUF_DIRTY)
@@ -751,17 +765,16 @@ unsigned int ZNS_AddrTransWrite(unsigned int zoneID, unsigned int logicalSliceAd
 
 	BLOCK_GROUP_ID = zoneMapPtr->zoneReg[zoneID].Phy_Block_Group_ID;
 
-	int sliceID = logicalSliceAddr - (zoneID * SLICE_PER_ZONE);
-	
+	int sliceID = logicalSliceAddr - (zoneID * SLICE_PER_ZONE);	
 
-	dieNo = ((BLOCK_GROUP_ID % BLOCK_GROUP_IN_COLUMN) * NUM_OF_DIE_PER_ZONE) + (zoneMapPtr->zoneReg[zoneID].Cur_Phy_Idx % NUM_OF_DIE_PER_ZONE);
+	dieNo = ((BLOCK_GROUP_ID % BLOCK_GROUP_IN_COLUMN) * NUM_OF_DIE_PER_ZONE) + (sliceID % NUM_OF_DIE_PER_ZONE);
 	if(CHANNEL_WAY_ORIENTED == 1){
 		dieNo = ((dieNo % 8) * 8) + (dieNo / 8);
 	}
 
-	pageNo = (zoneMapPtr->zoneReg[zoneID].Cur_Phy_Idx / NUM_OF_DIE_PER_ZONE) % (SLICES_PER_BLOCK);
+	pageNo = (sliceID / NUM_OF_DIE_PER_ZONE) % (SLICES_PER_BLOCK);
 
-	innerBlockNo = (zoneMapPtr->zoneReg[zoneID].Cur_Phy_Idx / (NUM_OF_DIE_PER_ZONE * SLICES_PER_BLOCK)) % (NUM_OF_BLOCK_PER_ZONE);
+	innerBlockNo = (sliceID / (NUM_OF_DIE_PER_ZONE * SLICES_PER_BLOCK)) % NUM_OF_BLOCK_PER_ZONE;
 	outerBlockNo = BLOCK_GROUP_ID / BLOCK_GROUP_IN_COLUMN;
 
 	blockNo = outerBlockNo * NUM_OF_BLOCK_PER_ZONE + innerBlockNo;
@@ -771,7 +784,6 @@ unsigned int ZNS_AddrTransWrite(unsigned int zoneID, unsigned int logicalSliceAd
 
 	logicalSliceMapPtr->logicalSlice[logicalSliceAddr].virtualSliceAddr = virtualSliceAddr;
 	virtualSliceMapPtr->virtualSlice[virtualSliceAddr].logicalSliceAddr = logicalSliceAddr;
-	zoneMapPtr->zoneReg[zoneID].Cur_Phy_Idx++;
 
 	//xil_printf("ZNS_AddrTrans: lsa: %x -> vsa: %x, zoneID: %d, BufferID: %d, blockNo: %d, pageNo: %d, dieNo: %d\r\n", logicalSliceAddr, virtualSliceAddr, zoneID, zoneMapPtr->zoneReg[zoneID].Buffer_ID, blockNo, pageNo, dieNo);
 

@@ -94,7 +94,6 @@ typedef struct _ZONE_REG
     unsigned int Write_Pointer;
 	int Buffer_ID;
 	int Phy_Block_Group_ID;
-	unsigned int Cur_Phy_Idx;
 } ZONE_REG;
 
 typedef struct _ZONE_MAP
