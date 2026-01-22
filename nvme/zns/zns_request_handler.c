@@ -257,7 +257,7 @@ int bufferQueue_Enqueue(unsigned int chNo){
 		bufferQueueMapPtr->bufferQueueReg[chNo].Rear = (bufferQueueMapPtr->bufferQueueReg[chNo].Rear + 1) % BUFFER_QUEUE_DEPTH;
 		bufferQueueMapPtr->bufferQueueReg[chNo].Num += 1;
 
-		xil_printf("Buffer Queue Enqueue: CH %d, Num %d\r\n", chNo, bufferQueueMapPtr->bufferQueueReg[chNo].Num);
+		//xil_printf("Buffer Queue Enqueue: CH %d, Num %d\r\n", chNo, bufferQueueMapPtr->bufferQueueReg[chNo].Num);
 	}
 	else
 		assert(!"[WARNING] Buffer Queue Full! [WARNING]");
@@ -270,7 +270,7 @@ void bufferQueue_Dequeue(unsigned int chNo){
 		bufferQueueMapPtr->bufferQueueReg[chNo].Rear = (bufferQueueMapPtr->bufferQueueReg[chNo].Rear + BUFFER_QUEUE_DEPTH - 1) % BUFFER_QUEUE_DEPTH;
 		bufferQueueMapPtr->bufferQueueReg[chNo].Num -= 1;
 
-		xil_printf("Buffer Queue Dequeue: CH %d, Num %d\r\n", chNo, bufferQueueMapPtr->bufferQueueReg[chNo].Num);
+		//xil_printf("Buffer Queue Dequeue: CH %d, Num %d\r\n", chNo, bufferQueueMapPtr->bufferQueueReg[chNo].Num);
 	}
 	else
 		assert(!"[WARNING] Buffer Queue Empty! [WARNING]");
@@ -664,7 +664,7 @@ void ZNS_EvictDataBufEntry(unsigned int zoneID, unsigned int originReqSlotTag){
 		unsigned int lastBuffer = uniBufRegPtr->LAST_BUF[zoneID];
 		if(lastBuffer == headBuffer && zoneMapPtr->zoneReg[zoneID].Zone_State != FULL)
 			return;
-		else if(bufferQueueMapPtr->bufferQueueReg[chNo].Num <= 1){
+		else if(bufferQueueMapPtr->bufferQueueReg[chNo].Num <= 0){
 			return;
 		}
 		else{
