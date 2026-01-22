@@ -660,6 +660,9 @@ void ZNS_EvictDataBufEntry(unsigned int zoneID, unsigned int originReqSlotTag){
 		unsigned int lastBuffer = uniBufRegPtr->LAST_BUF[zoneID];
 		if(lastBuffer == headBuffer && zoneMapPtr->zoneReg[zoneID].Zone_State != FULL)
 			return;
+		else if(bufferQueueMapPtr->bufferQueueReg[chNo].Num <= 1){
+			return;
+		}
 		else{
 			dataBufEntry = headBuffer;
 			bufferQueue_Dequeue(chNo);
@@ -761,7 +764,7 @@ void ZNS_DataReadFromNand(unsigned int zoneID, unsigned int originReqSlotTag)
 }
 
 unsigned int ZNS_AddrTransWrite(unsigned int zoneID, unsigned int logicalSliceAddr){
-	unsigned int BLOCK_GROUP_ID, virtualSliceAddr, dieNo, innerBlockNo, outerBlockNo, blockNo, pageNo, wayNo, chNo;
+	unsigned int BLOCK_GROUP_ID, virtualSliceAddr, dieNo, innerBlockNo, outerBlockNo, blockNo, pageNo;
 
 	BLOCK_GROUP_ID = zoneMapPtr->zoneReg[zoneID].Phy_Block_Group_ID;
 

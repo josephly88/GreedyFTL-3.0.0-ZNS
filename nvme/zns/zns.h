@@ -10,9 +10,9 @@
 #define ZNS_IO_COMMAND_SET									1			// 0-Normal, 1-ZNS
 
 // Row Group: 1-8192 (Must be a factor of 8192 (USER_BLOCKS_PER_DIE). E.g., 8192 / 1024 = 8 that has no remainder)
-#define NUM_OF_BLOCK_PER_ZONE								8			// 1 Block : 2MB
+#define NUM_OF_BLOCK_PER_ZONE								16			// 1 Block : 2MB
 // Column Group: 1-64 (Must be a factor of 64 (USER_DIES). E.g., 64 / 4 = 16 that has no remainder)
-#define NUM_OF_DIE_PER_ZONE									64
+#define NUM_OF_DIE_PER_ZONE									32
 
 #define SLICE_PER_STRIPE									(NUM_OF_DIE_PER_ZONE)
 
@@ -28,7 +28,7 @@
 // Each Stripe is NUM_OF_DIE_PER_ZONE
 
 // 0: Per-zone, 1: Unified, 2: Unified PU-Aware
-#define BUFFER_MODE											(0)		
+#define BUFFER_MODE											(2)		
 #define ADDITION_DATA_BUFFER_PER_OPEN_ZONE					(0)	// 2-stripe would be (SLICE_PER_STRIPE)
 // Options: -1 (Last), N/2 (N/2 Ping-Pong)
 #define EVICTION_OFFSET										(-1)    
