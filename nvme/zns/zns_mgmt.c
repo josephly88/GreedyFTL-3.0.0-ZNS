@@ -139,7 +139,7 @@ void handle_zns_reset_zone(IO_ZNS_ZONE_MANGAEMENT_SEND_DW13 mgmtSendInfo, unsign
 
 void resetZone(unsigned int zoneId){
     P_ZONE_MAP zoneMapPtr = (P_ZONE_MAP) ZONE_MAP_ADDR;
-    P_UNI_BUF_REG uniBufRegPtr = (P_UNI_BUF_REG) UNI_BUF_REG_ADDR;
+    P_BUFFER_QUEUE_MAP bufferQueueMapPtr = (P_BUFFER_QUEUE_MAP) BUFFER_QUEUE_MAP_ADDR;
     int BufferIdx, DieIdx;
     ZONE_REG zoneReg = zoneMapPtr->zoneReg[zoneId];
     int zoneBufferID = zoneReg.Buffer_ID;
@@ -152,9 +152,25 @@ void resetZone(unsigned int zoneId){
         }
     }
     else{
-        int lastBufIdx = uniBufRegPtr->LAST_BUF[zoneId];
-        if(lastBufIdx >= 0)
-            dataBufMapPtr->dataBuf[lastBufIdx].dirty = DATA_BUF_CLEAN;
+        for(BufferIdx = 0; BufferIdx < OPEN_ZONE_DATA_BUFFER_ENTRY_COUNT; BufferIdx++){
+            if(Lsa2ZoneId(dataBufMapPtr->dataBuf[BufferIdx].logicalSliceAddr) == zoneId){
+                dataBufMapPtr->dataBuf[BufferIdx].dirty = DATA_BUF_CLEAN;
+            }
+        }
+
+        if(BUFFER_MODE == 2){
+            int chNo;
+            for(chNo = 0; chNo < 8; chNo++){
+                int i;
+                int headNo = bufferQueueMapPtr->bufferQueueReg[chNo].Head;
+                for(i = 0; i < bufferQueueMapPtr->bufferQueueReg[chNo].Num; i++){
+                    unsigned int bufferEntry = ZNS_DATA_BUFFER_ENTRY_START + (chNo * BUFFER_QUEUE_DEPTH) + ((headNo + i) % BUFFER_QUEUE_DEPTH);
+                    if(Lsa2ZoneId(dataBufMapPtr->dataBuf[bufferEntry].logicalSliceAddr) == zoneId){
+                        dataBufMapPtr->dataBuf[bufferEntry].dirty = DATA_BUF_CLEAN;
+                    }
+                }
+            }
+        }
     }
 
     int WrittenSize = zoneReg.Write_Pointer - zoneReg.SLBA;
