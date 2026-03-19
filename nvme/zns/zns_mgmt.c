@@ -151,26 +151,29 @@ void resetZone(unsigned int zoneId){
             dataBufMapPtr->dataBuf[dataBufEntry].dirty = DATA_BUF_CLEAN;
         }
     }
-    else{
+    else if(BUFFER_MODE == 1){
         for(BufferIdx = 0; BufferIdx < OPEN_ZONE_DATA_BUFFER_ENTRY_COUNT; BufferIdx++){
             if(Lsa2ZoneId(dataBufMapPtr->dataBuf[BufferIdx].logicalSliceAddr) == zoneId){
                 dataBufMapPtr->dataBuf[BufferIdx].dirty = DATA_BUF_CLEAN;
             }
         }
-
-        if(BUFFER_MODE == 2){
-            int chNo;
-            for(chNo = 0; chNo < 8; chNo++){
-                int i;
-                int headNo = bufferQueueMapPtr->bufferQueueReg[chNo].Head;
-                for(i = 0; i < bufferQueueMapPtr->bufferQueueReg[chNo].Num; i++){
-                    unsigned int bufferEntry = ZNS_DATA_BUFFER_ENTRY_START + (chNo * BUFFER_QUEUE_DEPTH) + ((headNo + i) % BUFFER_QUEUE_DEPTH);
-                    if(Lsa2ZoneId(dataBufMapPtr->dataBuf[bufferEntry].logicalSliceAddr) == zoneId){
-                        dataBufMapPtr->dataBuf[bufferEntry].dirty = DATA_BUF_CLEAN;
-                    }
+    }
+    else if(BUFFER_MODE == 2){
+        int chNo;
+        for(chNo = 0; chNo < 8; chNo++){
+            int i;
+            int headNo = bufferQueueMapPtr->bufferQueueReg[chNo].Head;
+            for(i = 0; i < bufferQueueMapPtr->bufferQueueReg[chNo].Num; i++){
+                unsigned int bufferEntry = ZNS_DATA_BUFFER_ENTRY_START + (chNo * BUFFER_QUEUE_DEPTH) + ((headNo + i) % BUFFER_QUEUE_DEPTH);
+                if(Lsa2ZoneId(dataBufMapPtr->dataBuf[bufferEntry].logicalSliceAddr) == zoneId){
+                    dataBufMapPtr->dataBuf[bufferEntry].dirty = DATA_BUF_CLEAN;
                 }
             }
         }
+    }
+    else{
+        assert(!"[Error] Invalid Buffer Mode [Error]");
+        xil_printf("Invalid Buffer Mode: %d\r\n", BUFFER_MODE);
     }
 
     int WrittenSize = zoneReg.Write_Pointer - zoneReg.SLBA;

@@ -131,7 +131,6 @@ typedef struct _ZONE_WRITE_BUFFER_MAP
 typedef struct _UNI_BUF_REG
 {
 	int curBufWriteIdx;
-	int puRR;
 } UNI_BUF_REG, *P_UNI_BUF_REG;
 
 typedef struct _BUFFER_QUEUE_REG

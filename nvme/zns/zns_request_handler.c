@@ -42,7 +42,6 @@ void InitZNS()
 	if(BUFFER_MODE > 0){
 		uniBufRegPtr = (P_UNI_BUF_REG) UNI_BUF_REG_ADDR;
 		uniBufRegPtr->curBufWriteIdx = -1;
-		uniBufRegPtr->puRR = 0;
 		if(BUFFER_MODE == 2){
 			int i;
 			for(i = 0; i < 8; i++){
@@ -549,10 +548,7 @@ void ZNS_ReqTransSliceToLowLevel(unsigned int reqSlotTag){
 		dataBufEntry = ZNS_AllocateWriteDataBuf(zoneID, reqSlotTag);
 		reqPoolPtr->reqPool[reqSlotTag].dataBufInfo.entry = dataBufEntry;
 
-		if(BUFFER_MODE == 2)
-			ZNS_PUAwareEvictDataBufEntry(reqSlotTag);
-		else	
-			ZNS_EvictDataBufEntry(zoneID, reqSlotTag);
+		ZNS_EvictDataBufEntry(zoneID, reqSlotTag);
 
 		dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr = reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr;
 
@@ -648,10 +644,26 @@ void ZNS_EvictDataBufEntry(unsigned int zoneID, unsigned int originReqSlotTag){
 		int evictIdx = (uniBufRegPtr->curBufWriteIdx + (EVICTION_OFFSET + OPEN_ZONE_DATA_BUFFER_ENTRY_COUNT)) % OPEN_ZONE_DATA_BUFFER_ENTRY_COUNT;
 		dataBufEntry = ZNS_DATA_BUFFER_ENTRY_START + evictIdx;
 	}
-	else{
-		dataBufEntry = 0;
-		return;
+	else if(BUFFER_MODE == 2){
+		int chNoTmp = chNo_Cal(zoneID, originReqSlotTag);
+		int chNo = chNoTmp;
+		int i;
+		for(i = 0; i < 8; i++){
+			int checkChNo = (chNoTmp + i) % 8;
+			ZNS_bufferQueueDequeueUntilDirty(checkChNo);
+			if(bufferQueueMapPtr->bufferQueueReg[checkChNo].Num > 0){
+				chNo = checkChNo;
+				break;
+			}
+		}
+		if(i == 8)
+			return;
+
+		dataBufEntry = ZNS_DATA_BUFFER_ENTRY_START + (chNo * BUFFER_QUEUE_DEPTH) + bufferQueueMapPtr->bufferQueueReg[chNo].Head;
 	}
+	else{
+		assert(!"[Error] Invalid Buffer Mode [Error]");
+	}		
 
 	if(dataBufMapPtr->dataBuf[dataBufEntry].dirty == DATA_BUF_DIRTY)
 	{
@@ -692,47 +704,6 @@ void ZNS_bufferQueueDequeueUntilDirty(int chNo){
 	}
 }
 
-void ZNS_PUAwareEvictDataBufEntry(unsigned int originReqSlotTag){
-	unsigned int reqSlotTag, virtualSliceAddr, dataBufEntry;
-
-
-	int chNo = uniBufRegPtr->puRR;	
-	uniBufRegPtr->puRR = (uniBufRegPtr->puRR + 1) % 8;
-
-	ZNS_bufferQueueDequeueUntilDirty(chNo);
-
-	if(bufferQueueMapPtr->bufferQueueReg[chNo].Num <= 0){
-		return;
-	}
-
-	dataBufEntry = ZNS_DATA_BUFFER_ENTRY_START + (chNo * BUFFER_QUEUE_DEPTH) + bufferQueueMapPtr->bufferQueueReg[chNo].Head;	
-	bufferQueue_Dequeue(chNo);
-
-	if(dataBufMapPtr->dataBuf[dataBufEntry].dirty == DATA_BUF_DIRTY)
-	{
-		reqSlotTag = GetFromFreeReqQ();
-		virtualSliceAddr = ZNS_AddrTransWrite(dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr);
-
-		reqPoolPtr->reqPool[reqSlotTag].reqType = REQ_TYPE_NAND;
-		reqPoolPtr->reqPool[reqSlotTag].reqCode = REQ_CODE_WRITE;
-		reqPoolPtr->reqPool[reqSlotTag].nvmeCmdSlotTag = reqPoolPtr->reqPool[originReqSlotTag].nvmeCmdSlotTag;
-		reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr = dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr;
-		reqPoolPtr->reqPool[reqSlotTag].reqOpt.dataBufFormat = REQ_OPT_DATA_BUF_ENTRY;
-		reqPoolPtr->reqPool[reqSlotTag].reqOpt.nandAddr = REQ_OPT_NAND_ADDR_VSA;
-		reqPoolPtr->reqPool[reqSlotTag].reqOpt.nandEcc = REQ_OPT_NAND_ECC_ON;
-		reqPoolPtr->reqPool[reqSlotTag].reqOpt.nandEccWarning = REQ_OPT_NAND_ECC_WARNING_ON;
-		reqPoolPtr->reqPool[reqSlotTag].reqOpt.rowAddrDependencyCheck = REQ_OPT_ROW_ADDR_DEPENDENCY_CHECK;
-		reqPoolPtr->reqPool[reqSlotTag].reqOpt.blockSpace = REQ_OPT_BLOCK_SPACE_MAIN;
-		reqPoolPtr->reqPool[reqSlotTag].dataBufInfo.entry = dataBufEntry;
-		UpdateDataBufEntryInfoBlockingReq(dataBufEntry, reqSlotTag);
-		reqPoolPtr->reqPool[reqSlotTag].nandInfo.virtualSliceAddr = virtualSliceAddr;
-
-		SelectLowLevelReqQ(reqSlotTag);
-
-		dataBufMapPtr->dataBuf[dataBufEntry].dirty = DATA_BUF_CLEAN;
-	}
-
-}
 
 void ZNS_EvictAllDataBufEntry(unsigned int zoneID, unsigned int originReqSlotTag){
 	unsigned int reqSlotTag, virtualSliceAddr, dataBufEntry;
