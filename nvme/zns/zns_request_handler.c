@@ -48,8 +48,8 @@ void InitZNS()
 			for(i = 0; i < 8; i++){
 				bufferQueueMapPtr = (P_BUFFER_QUEUE_MAP) BUFFER_QUEUE_MAP_ADDR;
 				bufferQueueMapPtr->bufferQueueReg[i].Num = 0;
-				bufferQueueMapPtr->bufferQueueReg[i].Head = -1;
-				bufferQueueMapPtr->bufferQueueReg[i].Rear = -1;
+				bufferQueueMapPtr->bufferQueueReg[i].Head = 0;
+				bufferQueueMapPtr->bufferQueueReg[i].Rear = 0;
 			}
 		}
 	}
@@ -251,35 +251,29 @@ int chNo_Cal(unsigned int zoneID, unsigned int requestSlotTag){
 	return chNo;
 }
 
-int bufferQueue_Enqueue(unsigned int chNo){
-	if(bufferQueueMapPtr->bufferQueueReg[chNo].Num < BUFFER_QUEUE_DEPTH){
-		if(bufferQueueMapPtr->bufferQueueReg[chNo].Num == 0)
-			bufferQueueMapPtr->bufferQueueReg[chNo].Head = (bufferQueueMapPtr->bufferQueueReg[chNo].Head + 1) % BUFFER_QUEUE_DEPTH;
-		bufferQueueMapPtr->bufferQueueReg[chNo].Rear = (bufferQueueMapPtr->bufferQueueReg[chNo].Rear + 1) % BUFFER_QUEUE_DEPTH;
-		bufferQueueMapPtr->bufferQueueReg[chNo].Num += 1;
-
-		//xil_printf("Buffer Queue Enqueue: CH %d, Num %d\r\n", chNo, bufferQueueMapPtr->bufferQueueReg[chNo].Num);
-	}
-	else
-		assert(!"[WARNING] Buffer Queue Full! [WARNING]");
-
-	return bufferQueueMapPtr->bufferQueueReg[chNo].Rear;
+int bufferQueue_Enqueue(unsigned int chNo) {
+    if (bufferQueueMapPtr->bufferQueueReg[chNo].Num < BUFFER_QUEUE_DEPTH) {
+        if (bufferQueueMapPtr->bufferQueueReg[chNo].Num != 0) {
+            bufferQueueMapPtr->bufferQueueReg[chNo].Rear =
+                (bufferQueueMapPtr->bufferQueueReg[chNo].Rear + 1) % BUFFER_QUEUE_DEPTH;
+        }
+        bufferQueueMapPtr->bufferQueueReg[chNo].Num++;
+    } else {
+        assert(!"[WARNING] Buffer Queue Full! [WARNING]");
+    }
+    return bufferQueueMapPtr->bufferQueueReg[chNo].Rear;
 }
 
-void bufferQueue_Dequeue(unsigned int chNo){
-	if(bufferQueueMapPtr->bufferQueueReg[chNo].Num > 0){
-		bufferQueueMapPtr->bufferQueueReg[chNo].Head = (bufferQueueMapPtr->bufferQueueReg[chNo].Head + 1) % BUFFER_QUEUE_DEPTH;
-		bufferQueueMapPtr->bufferQueueReg[chNo].Num -= 1;
-
-		if(bufferQueueMapPtr->bufferQueueReg[chNo].Num == 0){
-			bufferQueueMapPtr->bufferQueueReg[chNo].Head = -1;
-			bufferQueueMapPtr->bufferQueueReg[chNo].Rear = -1;
-		}
-
-		//xil_printf("Buffer Queue Dequeue: CH %d, Num %d\r\n", chNo, bufferQueueMapPtr->bufferQueueReg[chNo].Num);
-	}
-	else
-		assert(!"[WARNING] Buffer Queue Empty! [WARNING]");
+void bufferQueue_Dequeue(unsigned int chNo) {
+    if (bufferQueueMapPtr->bufferQueueReg[chNo].Num > 0) {
+        if (bufferQueueMapPtr->bufferQueueReg[chNo].Num != 1) {
+            bufferQueueMapPtr->bufferQueueReg[chNo].Head =
+                (bufferQueueMapPtr->bufferQueueReg[chNo].Head + 1) % BUFFER_QUEUE_DEPTH;
+        }
+        bufferQueueMapPtr->bufferQueueReg[chNo].Num--;
+    } else {
+        assert(!"[WARNING] Buffer Queue Empty! [WARNING]");
+    }
 }
 
 int ZoneWriteCheck(unsigned int zoneID, unsigned int slba, unsigned int nlb){
