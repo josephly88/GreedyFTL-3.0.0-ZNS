@@ -28,10 +28,10 @@
 // Each Stripe is NUM_OF_DIE_PER_ZONE
 
 // 0: Per-zone, 1: Unified, 2: Unified PU-Aware
-#define BUFFER_MODE											(2)		
-#define ADDITION_DATA_BUFFER_PER_OPEN_ZONE					(0)	// 2-stripe would be (SLICE_PER_STRIPE)
+#define BUFFER_MODE											(0)		
+#define ADDITION_DATA_BUFFER_PER_OPEN_ZONE					(SLICE_PER_STRIPE)	// 2-stripe would be (SLICE_PER_STRIPE)
 // Options: -1 (Last), N/2 (N/2 Ping-Pong)
-#define EVICTION_OFFSET										(-1)    
+#define EVICTION_OFFSET										(-SLICE_PER_STRIPE)    
 
 // Each Entry is a slice (16KB)
 #define ACTIVE_ZONE_READ_BUFFER_ENTRY_COUNT					(64)		

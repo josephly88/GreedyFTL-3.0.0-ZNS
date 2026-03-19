@@ -638,7 +638,7 @@ void ZNS_EvictDataBufEntry(unsigned int zoneID, unsigned int originReqSlotTag){
 		// Evict next (N/2)
 		int evictIdx = (curBufWriteIdx + (EVICTION_OFFSET + DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE)) % DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE;
 
-		dataBufEntry = ZNS_DATA_BUFFER_ENTRY_START + (zoneID * DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE) + evictIdx;
+		dataBufEntry = ZNS_DATA_BUFFER_ENTRY_START + (bufferID * DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE) + evictIdx;
 	}
 	else if(BUFFER_MODE == 1){
 		int curBufWriteIdx = uniBufRegPtr->curBufWriteIdx;
