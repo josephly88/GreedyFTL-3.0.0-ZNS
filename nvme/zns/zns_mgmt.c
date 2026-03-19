@@ -172,7 +172,6 @@ void resetZone(unsigned int zoneId){
         }
     }
     else{
-        assert(!"[Error] Invalid Buffer Mode [Error]");
         xil_printf("Invalid Buffer Mode: %d\r\n", BUFFER_MODE);
     }
 
