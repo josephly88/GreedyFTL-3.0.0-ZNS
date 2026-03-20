@@ -357,7 +357,7 @@ unsigned int GetZoneDataBuf(unsigned int zoneID, int offset){
 		return ZNS_DATA_BUFFER_ENTRY_START + (bufferID * DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE) + off_idx;
 	}
 	else{
-		return uniBufRegPtr->curBufWriteIdx;
+		return ZNS_DATA_BUFFER_ENTRY_START + uniBufRegPtr->curBufWriteIdx;
 	}
 }
 
