@@ -792,7 +792,7 @@ unsigned int ZNS_AddrTransWrite(unsigned int logicalSliceAddr){
 	logicalSliceMapPtr->logicalSlice[logicalSliceAddr].virtualSliceAddr = virtualSliceAddr;
 	virtualSliceMapPtr->virtualSlice[virtualSliceAddr].logicalSliceAddr = logicalSliceAddr;
 
-	//xil_printf("ZNS_AddrTrans: lsa: %x -> vsa: %x, zoneID: %d, BufferID: %d, blockNo: %d, pageNo: %d, dieNo: %d\r\n", logicalSliceAddr, virtualSliceAddr, zoneID, zoneMapPtr->zoneReg[zoneID].Buffer_ID, blockNo, pageNo, dieNo);
+	//xil_printf("[DEBUG] LSA:0x%08x | Z:%d | BG:%d | sID:%d | die:%d | pg:%d | blk:%d | VSA:0x%08x\r\n", logicalSliceAddr, zoneID, BLOCK_GROUP_ID, sliceID, dieNo, pageNo, blockNo, virtualSliceAddr);
 
 	return virtualSliceAddr;
 }
