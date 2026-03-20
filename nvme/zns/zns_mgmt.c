@@ -153,8 +153,9 @@ void resetZone(unsigned int zoneId){
     }
     else if(BUFFER_MODE == 1){
         for(BufferIdx = 0; BufferIdx < OPEN_ZONE_DATA_BUFFER_ENTRY_COUNT; BufferIdx++){
-            if(Lsa2ZoneId(dataBufMapPtr->dataBuf[BufferIdx].logicalSliceAddr) == zoneId){
-                dataBufMapPtr->dataBuf[BufferIdx].dirty = DATA_BUF_CLEAN;
+            unsigned int dataBufEntry = ZNS_DATA_BUFFER_ENTRY_START + BufferIdx;
+            if(Lsa2ZoneId(dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr) == zoneId){
+                dataBufMapPtr->dataBuf[dataBufEntry].dirty = DATA_BUF_CLEAN;
             }
         }
     }

@@ -579,22 +579,14 @@ void ZNS_ReqTransSliceToLowLevel(unsigned int reqSlotTag){
 
 unsigned int ZNS_AllocateWriteDataBuf(unsigned int zoneID, unsigned int reqSlotTag){
 
-    unsigned int dataBufEntry, last_dataBufEntry, bufferID;
+    unsigned int dataBufEntry;
 
 	//xil_printf("Catch a ZNS Request LogicalSliceAddr : 0x%x, zone ID : %d \r\n", reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr, zoneID);
 	
 	// In case write smaller than a slice which can fit the last buffer
 	if(BUFFER_MODE == 0){
-		bufferID = zoneMapPtr->zoneReg[zoneID].Buffer_ID;
-		last_dataBufEntry = GetZoneDataBuf(zoneID, 0);
-		if(zoneWriteBufMapPtr->zoneWriteBufReg[bufferID].curBufWriteIdx >= 0
-			&& dataBufMapPtr->dataBuf[last_dataBufEntry].logicalSliceAddr == reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr){
-			dataBufEntry = last_dataBufEntry;
-		}
-		else{
-			incrementDataBufPointer(zoneID);
-			dataBufEntry = GetZoneDataBuf(zoneID, 0);
-		}
+		incrementDataBufPointer(zoneID);
+		dataBufEntry = GetZoneDataBuf(zoneID, 0);
 	}
 	else{
 		if(BUFFER_MODE == 1){
