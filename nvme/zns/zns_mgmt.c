@@ -155,6 +155,8 @@ void resetZone(unsigned int zoneId){
             int cnt = wrrPtr->buffer_count[zoneId];
             wrrPtr->buffer_count[zoneId] = 0;
             wrrPtr->total_buffer_count -= cnt;
+
+            wrr_remove_zone(zoneId);
         }
     }
     else if(BUFFER_MODE == 1){

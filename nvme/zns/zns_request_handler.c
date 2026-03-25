@@ -32,6 +32,10 @@ void InitZNS()
 	xil_printf("- BLOCK_GROUP_PER_SSD: %d\r\n", BLOCK_GROUP_PER_SSD);
 	xil_printf("- ZONE_BLOCK_GROUP_START: %d\r\n", ZONE_BLOCK_GROUP_START);
 	xil_printf("\r\n");
+
+	XTime t;
+	XTime_GetTime(&t);
+	srand((unsigned int)t);
 	
 	validBlockGroupFifoPtr = (P_VALID_BLOCK_GROUP_FIFO) VALID_BLOCK_GROUP_FIFO_ADDR;
 	validBlockGroupFifoPtr->Valid_Count = 0;
@@ -42,9 +46,6 @@ void InitZNS()
 	if(BUFFER_MODE == 0 && NON_SHARE_ZONE_BALANCE == 1){
 		wrrPtr = (P_WRR) WRR_ADDR;
 		wrr_init();
-		wrr_build_schedule();
-		wrrPtr->schedule_index = 0;
-		wrrPtr->total_buffer_count = 0;
 	}
 
 	if(BUFFER_MODE == 1){
@@ -78,11 +79,6 @@ void InitZNS()
 	for(i = 0; i < SLICE_PER_STRIPE; i++){
 		zoneMapPtr->readBufPtr[i] = 0;
 	}
-
-	// Example: seed once during initialization
-	XTime t;
-	XTime_GetTime(&t);
-	srand((unsigned int)t);
 }
 
 void parameterCheck(){
@@ -157,9 +153,6 @@ void shuffleValidBlockGroups(){
 	if(BLOCK_SHUFFLE_ENABLE){
 		// Shuffle the validBlockShuffleList
 		int i;
-		XTime t;
-		XTime_GetTime(&t);
-		srand(t);
 		for(i = validBlockGroupFifoPtr->Valid_Count-1; i > 0; i--){
 			int r = rand() % (i+1);
 			int swap = validBlockGroupFifoPtr->FIFO_LIST[r];
@@ -246,88 +239,78 @@ void bufferIDFifo_Enqueue(unsigned int element){
 }
 
 void wrr_init() {
+	
     int i;
     for (i = 0; i < MAXIMUM_OPEN_ZONE_COUNT; i++) {
-        if (i >= 0 && i <= 1) {
-            wrrPtr->weight[i] = 1;
-        } else if (i >= 2 && i <= 5) {
-            wrrPtr->weight[i] = 2;
-        } else if (i >= 6 && i <= 13) {
-            wrrPtr->weight[i] = 4;
-        } else if (i >= 14 && i <= 29) {
-            wrrPtr->weight[i] = 8;
-        } else if (i >= 30 && i <= 61) {
-            wrrPtr->weight[i] = 16;
-        } else {
-            wrrPtr->weight[i] = 0; // default if outside defined ranges
-        }
-
 		wrrPtr->buffer_count[i] = 0;
-    }
+		wrrPtr->zoneList[i] = -1;
+		wrrPtr->weightList[i] = -1;
+    }	
+	wrrPtr->total_buffer_count = 0;
+	wrrPtr->listLength = 0;
+	wrrPtr->total_weight = 0;	
 }
 
-void wrr_build_schedule() {
-    int total_slots = 682;  // fixed length
-    int i, k;
-
-    // Initialize schedule with -1 (empty)
-    for (i = 0; i < total_slots; i++) {
-        wrrPtr->schedule[i] = -1;
-    }
-
-    // Place each zone's entries evenly spaced
-    for (i = MAXIMUM_OPEN_ZONE_COUNT-1; i >= 0; i--) {
-        int w = wrrPtr->weight[i];
-        if (w > 0) {
-            double stride = (double)total_slots / w;
-            for (k = 0; k < w; k++) {
-                int pos = (int)(k * stride) % total_slots;
-                // If slot already filled, move forward until empty
-                while (wrrPtr->schedule[pos] != -1) {
-                    pos = (pos + 1) % total_slots;
-                }
-                wrrPtr->schedule[pos] = i;
-            }
-        }
-    }
+int wrr_get_zone_weight(int zoneID) {
+    if (zoneID >= 0 && zoneID <= 1) return 1;
+    else if (zoneID >= 2 && zoneID <= 5) return 2;
+    else if (zoneID >= 6 && zoneID <= 13) return 4;
+    else if (zoneID >= 14 && zoneID <= 29) return 8;
+    else if (zoneID >= 30 && zoneID <= 61) return 16;
+    else return 0;
 }
 
-int wrr_zone_pending() {
-    // Loop through the schedule once
+void wrr_add_zone(int zoneID){
+	int w = wrr_get_zone_weight(zoneID);
+
 	int i;
-    for (i = 0; i < 682; i++) {
-        int zone_id = wrrPtr->schedule[wrrPtr->schedule_index];
+	for(i = 0; i < wrrPtr->listLength; i++){
+		if(wrrPtr->zoneList[i] == zoneID) return;
+	}
 
-        if (zoneMapPtr->zoneReg[zone_id].Zone_State == IMPLICITLY_OPENED ||
-            zoneMapPtr->zoneReg[zone_id].Zone_State == EXPLICITLY_OPENED ||
-			zoneMapPtr->zoneReg[zone_id].Zone_State == FULL) {
-            if (wrrPtr->buffer_count[zone_id] > 0) {
-                int ret = zone_id;
-
-                wrrPtr->schedule_index = (wrrPtr->schedule_index + 1) % 682;
-                return ret;
-            }
-        }
-        // Advance index and keep searching
-        wrrPtr->schedule_index = (wrrPtr->schedule_index + 1) % 682;
-    }
-
-    // If we scanned the whole schedule and found nothing, assert
-    xil_printf("[DEBUG] Entering wrr_zone_pending: total_buffer_count=%d, schedule_index=%d\r\n",
-               wrrPtr->total_buffer_count, wrrPtr->schedule_index);
-
-    for (i = 0; i < MAXIMUM_OPEN_ZONE_COUNT; i++) {
-		xil_printf("    Zone %d: buffer_count=%d, state=%d\r\n",
-					i, wrrPtr->buffer_count[i], zoneMapPtr->zoneReg[i].Zone_State);
-    }
-
-    assert(!"No pending zone found in WRR schedule");
-    return -1; // defensive return
+	wrrPtr->zoneList[wrrPtr->listLength] = zoneID;
+	wrrPtr->weightList[wrrPtr->listLength] = w;
+	wrrPtr->listLength++;
+	wrrPtr->total_weight += w;
 }
 
-void wrr_increment(int zoneID){
-	wrrPtr->total_buffer_count += 1;
-	wrrPtr->buffer_count[zoneID] += 1;		
+void wrr_remove_zone(int zoneID){
+	int i;
+	for (i = 0; i < wrrPtr->listLength; i++) {
+        if (wrrPtr->zoneList[i] == zoneID) {
+            wrrPtr->total_weight -= wrrPtr->weightList[i];
+
+            // Shift remaining entries left
+			int j;
+            for (j = i; j < wrrPtr->listLength - 1; j++) {
+                wrrPtr->zoneList[j] = wrrPtr->zoneList[j+1];
+                wrrPtr->weightList[j] = wrrPtr->weightList[j+1];
+            }
+
+            wrrPtr->zoneList[wrrPtr->listLength - 1] = -1;
+            wrrPtr->weightList[wrrPtr->listLength - 1] = -1;
+            wrrPtr->listLength--;
+            return;
+        }
+    }
+}
+
+int wrr_select_zone_probability() {
+    if (wrrPtr->total_weight <= 0 || wrrPtr->listLength == 0) {
+        return -1; // no active zones
+    }
+
+    int x = rand() % wrrPtr->total_weight;  // [0, total_weight-1]
+    int sum = 0;
+	int i;
+    for (i = 0; i < wrrPtr->listLength; i++) {
+        sum += wrrPtr->weightList[i];
+        if (sum > x) {
+            return wrrPtr->zoneList[i];
+        }
+    }
+
+    return -1; // defensive fallback
 }
 
 int ZoneWriteCheck(unsigned int zoneID, unsigned int slba, unsigned int nlb){
@@ -616,14 +599,18 @@ void ZNS_ReqTransSliceToLowLevel(unsigned int reqSlotTag){
 		reqPoolPtr->reqPool[reqSlotTag].dataBufInfo.entry = dataBufEntry;
 
 		ZNS_EvictDataBufEntry(zoneID, reqSlotTag);
-		if(BUFFER_MODE == 0 && NON_SHARE_ZONE_BALANCE == 1){
-			wrr_increment(zoneID);
-		}
 
 		dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr = reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr;
 
 		dataBufMapPtr->dataBuf[dataBufEntry].dirty = DATA_BUF_DIRTY;
 		reqPoolPtr->reqPool[reqSlotTag].reqCode = REQ_CODE_RxDMA;
+
+		if(BUFFER_MODE == 0 && NON_SHARE_ZONE_BALANCE == 1){
+			if(wrrPtr->buffer_count[zoneID] == 0)
+				wrr_add_zone(zoneID);	
+			wrrPtr->total_buffer_count += 1;
+			wrrPtr->buffer_count[zoneID] += 1;		
+		}
 	}
 	else if(reqPoolPtr->reqPool[reqSlotTag].reqCode  == REQ_CODE_ZONE_READ)
 	{
@@ -690,7 +677,9 @@ void ZNS_EvictDataBufEntry(unsigned int zoneID, unsigned int originReqSlotTag){
 	if(BUFFER_MODE == 0){		
 		if(NON_SHARE_ZONE_BALANCE == 1){
 			if(wrrPtr->total_buffer_count >= EVICTION_THRESHOLD){
-				unsigned int evict_zoneID = wrr_zone_pending();
+				unsigned int evict_zoneID = wrr_select_zone_probability();
+				if(evict_zoneID == -1)
+					assert(!"[ERROR] No valid zone selected in probability balancer [ERROR]");
 				
 				int bufferID = zoneMapPtr->zoneReg[evict_zoneID].Buffer_ID;
 				int dirtyIdx = zoneWriteBufMapPtr->zoneWriteBufReg[bufferID].dirtyBufIdx;
@@ -698,8 +687,11 @@ void ZNS_EvictDataBufEntry(unsigned int zoneID, unsigned int originReqSlotTag){
 				
 				zoneWriteBufMapPtr->zoneWriteBufReg[bufferID].dirtyBufIdx = (dirtyIdx + 1) % DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE;
 				wrrPtr->buffer_count[evict_zoneID] -= 1;
-				wrrPtr->total_buffer_count -= 1;
+				wrrPtr->total_buffer_count -= 1;	
 
+				if(wrrPtr->buffer_count[evict_zoneID] == 0){
+					wrr_remove_zone(evict_zoneID);
+				}
 			}
 			else{
 				int bufferID = zoneMapPtr->zoneReg[zoneID].Buffer_ID;
@@ -714,7 +706,11 @@ void ZNS_EvictDataBufEntry(unsigned int zoneID, unsigned int originReqSlotTag){
 
 					zoneWriteBufMapPtr->zoneWriteBufReg[bufferID].dirtyBufIdx = (dirtyIdx + 1) % DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE;
 					wrrPtr->buffer_count[zoneID] -= 1;
-					wrrPtr->total_buffer_count -= 1;
+					wrrPtr->total_buffer_count -= 1;		
+
+					if(wrrPtr->buffer_count[zoneID] == 0){
+						wrr_remove_zone(zoneID);
+					}
 				}
 				else
 					return;

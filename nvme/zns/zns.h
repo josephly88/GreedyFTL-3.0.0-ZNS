@@ -138,11 +138,13 @@ typedef struct _UNI_BUF_REG
 
 typedef struct _WRR
 {
-	int weight[MAXIMUM_OPEN_ZONE_COUNT];
-	int schedule[682];
-	int schedule_index;
-	int total_buffer_count;
 	int buffer_count[MAXIMUM_OPEN_ZONE_COUNT];
+	int total_buffer_count;
+
+	int zoneList[MAXIMUM_OPEN_ZONE_COUNT];
+	int weightList[MAXIMUM_OPEN_ZONE_COUNT];
+	int listLength;
+	int total_weight;
 } WRR, *P_WRR;
 
 /*-------------------------------------------------------------

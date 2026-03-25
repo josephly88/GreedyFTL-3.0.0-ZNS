@@ -25,9 +25,13 @@ void bufferIDFifo_Enqueue(unsigned int element);
 
 void wrr_init();
 
-void wrr_build_schedule();
+int wrr_get_zone_weight(int zoneID);
 
-void wrr_increment(int zoneID);
+void wrr_add_zone(int zoneID);
+
+void wrr_remove_zone(int zoneID);
+
+int wrr_select_zone_probability();
 
 int ZoneWriteCheck(unsigned int zoneID, unsigned int slba, unsigned int numOfSlice);
 
