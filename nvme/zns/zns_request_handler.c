@@ -43,7 +43,7 @@ void InitZNS()
 	shuffleValidBlockGroups();
 	validBlockGroupFifoPtr->Num = validBlockGroupFifoPtr->Valid_Count;
 
-	if(BUFFER_MODE == 0 && NON_SHARE_ZONE_BALANCE == 1){
+	if(BUFFER_MODE == 0 && NON_SHARE_MOD == 1){
 		wrrPtr = (P_WRR) WRR_ADDR;
 		wrr_init();
 	}
@@ -410,7 +410,7 @@ void incrementDataBufPointer(unsigned int zoneID){
 	if(BUFFER_MODE == 0){
 		int bufferID = zoneMapPtr->zoneReg[zoneID].Buffer_ID;
 		int curBufWriteIdx = zoneWriteBufMapPtr->zoneWriteBufReg[bufferID].curBufWriteIdx;
-		if(NON_SHARE_ZONE_BALANCE == 1 && curBufWriteIdx == -1)
+		if(NON_SHARE_MOD == 1 && curBufWriteIdx == -1)
 			zoneWriteBufMapPtr->zoneWriteBufReg[bufferID].dirtyBufIdx = 0;
 		zoneWriteBufMapPtr->zoneWriteBufReg[bufferID].curBufWriteIdx = (curBufWriteIdx + 1) % DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE;
 	}
@@ -605,7 +605,7 @@ void ZNS_ReqTransSliceToLowLevel(unsigned int reqSlotTag){
 		dataBufMapPtr->dataBuf[dataBufEntry].dirty = DATA_BUF_DIRTY;
 		reqPoolPtr->reqPool[reqSlotTag].reqCode = REQ_CODE_RxDMA;
 
-		if(BUFFER_MODE == 0 && NON_SHARE_ZONE_BALANCE == 1){
+		if(BUFFER_MODE == 0 && NON_SHARE_MOD == 1){
 			if(wrrPtr->buffer_count[zoneID] == 0)
 				wrr_add_zone(zoneID);	
 			wrrPtr->total_buffer_count += 1;
@@ -675,7 +675,8 @@ void ZNS_EvictDataBufEntry(unsigned int zoneID, unsigned int originReqSlotTag){
 	unsigned int reqSlotTag, virtualSliceAddr, dataBufEntry;
 
 	if(BUFFER_MODE == 0){		
-		if(NON_SHARE_ZONE_BALANCE == 1){
+		if(NON_SHARE_MOD == 1){
+
 			if(wrrPtr->total_buffer_count >= EVICTION_THRESHOLD){
 				unsigned int evict_zoneID = wrr_select_zone_probability();
 				if(evict_zoneID == -1)
@@ -689,32 +690,22 @@ void ZNS_EvictDataBufEntry(unsigned int zoneID, unsigned int originReqSlotTag){
 				wrrPtr->buffer_count[evict_zoneID] -= 1;
 				wrrPtr->total_buffer_count -= 1;	
 
+				xil_printf("[DEBUG] evict_zone=%d weight=%d bufferID=%d dirtyIdx=%d bufCount=%d totalBuf=%d totalWeight=%d listLen=%d\r\n",
+					evict_zoneID,
+					wrr_get_zone_weight(evict_zoneID),
+					bufferID,
+					dirtyIdx,
+					wrrPtr->buffer_count[evict_zoneID],
+					wrrPtr->total_buffer_count,
+					wrrPtr->total_weight,
+					wrrPtr->listLength);
+
 				if(wrrPtr->buffer_count[evict_zoneID] == 0){
 					wrr_remove_zone(evict_zoneID);
 				}
 			}
-			else{
-				int bufferID = zoneMapPtr->zoneReg[zoneID].Buffer_ID;
-				int curidx = zoneWriteBufMapPtr->zoneWriteBufReg[bufferID].curBufWriteIdx;
-				int dirtyIdx = zoneWriteBufMapPtr->zoneWriteBufReg[bufferID].dirtyBufIdx;
-
-				int diff = curidx - dirtyIdx;
-				if(diff < 0) diff = DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE + diff;
-
-				if(diff >= DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE / 2){
-					dataBufEntry = ZNS_DATA_BUFFER_ENTRY_START + (bufferID * DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE) + dirtyIdx;
-
-					zoneWriteBufMapPtr->zoneWriteBufReg[bufferID].dirtyBufIdx = (dirtyIdx + 1) % DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE;
-					wrrPtr->buffer_count[zoneID] -= 1;
-					wrrPtr->total_buffer_count -= 1;		
-
-					if(wrrPtr->buffer_count[zoneID] == 0){
-						wrr_remove_zone(zoneID);
-					}
-				}
-				else
-					return;
-			}
+			else
+				return;
 		}
 		else{
 			int bufferID = zoneMapPtr->zoneReg[zoneID].Buffer_ID;
@@ -798,7 +789,7 @@ void ZNS_EvictAllDataBufEntry(unsigned int zoneID, unsigned int originReqSlotTag
 		bufEntryIdx++;
 	}
 
-	if(BUFFER_MODE == 0 && NON_SHARE_ZONE_BALANCE){
+	if(BUFFER_MODE == 0 && NON_SHARE_MOD){
 		int cnt = wrrPtr->buffer_count[zoneID];
 		wrrPtr->buffer_count[zoneID] = 0;
 		wrrPtr->total_buffer_count -= cnt;

@@ -29,12 +29,12 @@
 
 // 0: Per-zone, 1: Unified
 #define BUFFER_MODE											(0)		
-#define ADDITION_DATA_BUFFER_PER_OPEN_ZONE					(0)	// 2-stripe would be (SLICE_PER_STRIPE)
+#define ADDITION_DATA_BUFFER_PER_OPEN_ZONE					(SLICE_PER_STRIPE)	// 2-stripe would be (SLICE_PER_STRIPE)
 // Options: -1 (Last), N/2 (N/2 Ping-Pong)
 #define EVICTION_OFFSET										(-1)    
-// Only for BUFFER_MODE 0 for ZONE eviction balance
-#define NON_SHARE_ZONE_BALANCE								(1)
-#define EVICTION_THRESHOLD									(10)
+// Only for BUFFER_MODE 0, MOD 1 is Weight Balance Evictoin, MOD 2 is Sizing
+#define NON_SHARE_MOD										(2)
+#define EVICTION_THRESHOLD									(32)
 
 // Each Entry is a slice (16KB)
 #define ACTIVE_ZONE_READ_BUFFER_ENTRY_COUNT					(64)		

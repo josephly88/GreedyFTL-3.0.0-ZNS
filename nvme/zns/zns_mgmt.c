@@ -151,7 +151,7 @@ void resetZone(unsigned int zoneId){
             dataBufMapPtr->dataBuf[dataBufEntry].dirty = DATA_BUF_CLEAN;
         }
 
-        if(NON_SHARE_ZONE_BALANCE == 1){
+        if(NON_SHARE_MOD == 1){
             int cnt = wrrPtr->buffer_count[zoneId];
             wrrPtr->buffer_count[zoneId] = 0;
             wrrPtr->total_buffer_count -= cnt;
