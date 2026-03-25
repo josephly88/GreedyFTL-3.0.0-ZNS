@@ -23,10 +23,6 @@ unsigned int bufferIDFifo_Dequeue();
 
 void bufferIDFifo_Enqueue(unsigned int element);
 
-int bufferQueue_Enqueue(unsigned int chNo);
-
-void bufferQueue_Dequeue(unsigned int chNo);
-
 int ZoneWriteCheck(unsigned int zoneID, unsigned int slba, unsigned int numOfSlice);
 
 int ZoneReadCheck(unsigned int zoneID, unsigned int slba, unsigned int nlb);
@@ -50,10 +46,6 @@ unsigned int ZNS_AllocateWriteDataBuf(unsigned int zoneID, unsigned int reqSlotT
 unsigned int ZNS_AllocateReadDataBuf(unsigned int zoneID, unsigned int reqSlotTag);
 
 void ZNS_EvictDataBufEntry(unsigned int zoneID, unsigned int originReqSlotTag);
-
-void ZNS_bufferQueueDequeueUntilDirty(int chNo);
-
-void ZNS_PUAwareEvictDataBufEntry(unsigned int originReqSlotTag);
 
 void ZNS_EvictAllDataBufEntry(unsigned int zoneID, unsigned int originReqSlotTag);
 
