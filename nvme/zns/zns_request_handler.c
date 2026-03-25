@@ -313,6 +313,15 @@ int wrr_select_zone_probability() {
     return -1; // defensive fallback
 }
 
+int weighted_buffer_size(int zoneID) {
+    if (zoneID >= 0 && zoneID <= 1) return DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE/16;
+    else if (zoneID >= 2 && zoneID <= 5) return DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE/8;
+    else if (zoneID >= 6 && zoneID <= 13) return DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE/4;
+    else if (zoneID >= 14 && zoneID <= 29) return DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE/2;
+    else if (zoneID >= 30 && zoneID <= 61) return DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE;
+    else return 0;
+}
+
 int ZoneWriteCheck(unsigned int zoneID, unsigned int slba, unsigned int nlb){
 	ZONE_REG zoneReg;
 	zoneReg = zoneMapPtr->zoneReg[zoneID];
@@ -412,6 +421,10 @@ void incrementDataBufPointer(unsigned int zoneID){
 		int curBufWriteIdx = zoneWriteBufMapPtr->zoneWriteBufReg[bufferID].curBufWriteIdx;
 		if(NON_SHARE_MOD == 1 && curBufWriteIdx == -1)
 			zoneWriteBufMapPtr->zoneWriteBufReg[bufferID].dirtyBufIdx = 0;
+		if(NON_SHARE_MOD == 2){
+			zoneWriteBufMapPtr->zoneWriteBufReg[bufferID].curBufWriteIdx = (curBufWriteIdx + 1) % weighted_buffer_size(zoneID);
+			return;
+		}			
 		zoneWriteBufMapPtr->zoneWriteBufReg[bufferID].curBufWriteIdx = (curBufWriteIdx + 1) % DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE;
 	}
 	else if(BUFFER_MODE == 1){
@@ -690,6 +703,7 @@ void ZNS_EvictDataBufEntry(unsigned int zoneID, unsigned int originReqSlotTag){
 				wrrPtr->buffer_count[evict_zoneID] -= 1;
 				wrrPtr->total_buffer_count -= 1;	
 
+				/*
 				xil_printf("[DEBUG] evict_zone=%d weight=%d bufferID=%d dirtyIdx=%d bufCount=%d totalBuf=%d totalWeight=%d listLen=%d\r\n",
 					evict_zoneID,
 					wrr_get_zone_weight(evict_zoneID),
@@ -699,6 +713,7 @@ void ZNS_EvictDataBufEntry(unsigned int zoneID, unsigned int originReqSlotTag){
 					wrrPtr->total_buffer_count,
 					wrrPtr->total_weight,
 					wrrPtr->listLength);
+					*/
 
 				if(wrrPtr->buffer_count[evict_zoneID] == 0){
 					wrr_remove_zone(evict_zoneID);
@@ -713,7 +728,11 @@ void ZNS_EvictDataBufEntry(unsigned int zoneID, unsigned int originReqSlotTag){
 
 			// Ping-Pong Buffer, Flash write the next row buffer if it is dirty
 			// Evict next (N/2)
-			int evictIdx = (curBufWriteIdx + (EVICTION_OFFSET + DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE)) % DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE;
+			int evictIdx = (curBufWriteIdx + (EVICTION_OFFSET + DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE)) % DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE;			
+
+			if(NON_SHARE_MOD == 2){
+				evictIdx = (curBufWriteIdx + (EVICTION_OFFSET + weighted_buffer_size(zoneID))) % weighted_buffer_size(zoneID);
+			}		
 
 			dataBufEntry = ZNS_DATA_BUFFER_ENTRY_START + (bufferID * DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE) + evictIdx;
 		}

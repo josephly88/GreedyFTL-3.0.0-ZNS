@@ -33,6 +33,8 @@ void wrr_remove_zone(int zoneID);
 
 int wrr_select_zone_probability();
 
+int weighted_buffer_size(int zoneID);
+
 int ZoneWriteCheck(unsigned int zoneID, unsigned int slba, unsigned int numOfSlice);
 
 int ZoneReadCheck(unsigned int zoneID, unsigned int slba, unsigned int nlb);
