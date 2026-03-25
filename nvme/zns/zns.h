@@ -10,14 +10,14 @@
 #define ZNS_IO_COMMAND_SET									1			// 0-Normal, 1-ZNS
 
 // Row Group: 1-8192 (Must be a factor of 8192 (USER_BLOCKS_PER_DIE). E.g., 8192 / 1024 = 8 that has no remainder)
-#define NUM_OF_BLOCK_PER_ZONE								16			// 1 Block : 2MB
+#define NUM_OF_BLOCK_PER_ZONE								8			// 1 Block : 2MB
 // Column Group: 1-64 (Must be a factor of 64 (USER_DIES). E.g., 64 / 4 = 16 that has no remainder)
 #define NUM_OF_DIE_PER_ZONE									32
 
 #define SLICE_PER_STRIPE									(NUM_OF_DIE_PER_ZONE)
 
-#define MAXIMUM_OPEN_ZONE_COUNT                  			20
-#define MAXIMUM_ACTIVE_ZONE_COUNT                  			20
+#define MAXIMUM_OPEN_ZONE_COUNT                  			62
+#define MAXIMUM_ACTIVE_ZONE_COUNT                  			62
 #define ZNS_LBA_START_NVME_BLOCK							0x800000	// 0x800000 * 0x1000 (NVMe Block Size: 4KB) = 32GB
 
 // 0-Channel Oriented, 1-Way Oriented
@@ -28,10 +28,10 @@
 // Each Stripe is NUM_OF_DIE_PER_ZONE
 
 // 0: Per-zone, 1: Unified, 2: Unified PU-Aware
-#define BUFFER_MODE											(0)		
-#define ADDITION_DATA_BUFFER_PER_OPEN_ZONE					(SLICE_PER_STRIPE)	// 2-stripe would be (SLICE_PER_STRIPE)
+#define BUFFER_MODE											(2)		
+#define ADDITION_DATA_BUFFER_PER_OPEN_ZONE					(0)	// 2-stripe would be (SLICE_PER_STRIPE)
 // Options: -1 (Last), N/2 (N/2 Ping-Pong)
-#define EVICTION_OFFSET										(-SLICE_PER_STRIPE)    
+#define EVICTION_OFFSET										(-1)    
 
 // Each Entry is a slice (16KB)
 #define ACTIVE_ZONE_READ_BUFFER_ENTRY_COUNT					(64)		
@@ -132,18 +132,6 @@ typedef struct _UNI_BUF_REG
 {
 	int curBufWriteIdx;
 } UNI_BUF_REG, *P_UNI_BUF_REG;
-
-typedef struct _BUFFER_QUEUE_REG
-{
-	int Head;
-	int Rear;
-	int Num;
-} BUFFER_QUEUE_REG, *P_BUFFER_QUEUE_REG;
-
-typedef struct _BUFFER_QUEUE_MAP
-{
-	BUFFER_QUEUE_REG bufferQueueReg[8];
-} BUFFER_QUEUE_MAP, *P_BUFFER_QUEUE_MAP;
 
 /*-------------------------------------------------------------
 		Section : NVMe ZNS Command Specification

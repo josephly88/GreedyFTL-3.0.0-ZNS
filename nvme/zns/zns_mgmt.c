@@ -139,7 +139,6 @@ void handle_zns_reset_zone(IO_ZNS_ZONE_MANGAEMENT_SEND_DW13 mgmtSendInfo, unsign
 
 void resetZone(unsigned int zoneId){
     P_ZONE_MAP zoneMapPtr = (P_ZONE_MAP) ZONE_MAP_ADDR;
-    P_BUFFER_QUEUE_MAP bufferQueueMapPtr = (P_BUFFER_QUEUE_MAP) BUFFER_QUEUE_MAP_ADDR;
     int BufferIdx, DieIdx;
     ZONE_REG zoneReg = zoneMapPtr->zoneReg[zoneId];
     int zoneBufferID = zoneReg.Buffer_ID;
@@ -156,19 +155,6 @@ void resetZone(unsigned int zoneId){
             unsigned int dataBufEntry = ZNS_DATA_BUFFER_ENTRY_START + BufferIdx;
             if(Lsa2ZoneId(dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr) == zoneId){
                 dataBufMapPtr->dataBuf[dataBufEntry].dirty = DATA_BUF_CLEAN;
-            }
-        }
-    }
-    else if(BUFFER_MODE == 2){
-        int chNo;
-        for(chNo = 0; chNo < 8; chNo++){
-            int i;
-            int headNo = bufferQueueMapPtr->bufferQueueReg[chNo].Head;
-            for(i = 0; i < bufferQueueMapPtr->bufferQueueReg[chNo].Num; i++){
-                unsigned int bufferEntry = ZNS_DATA_BUFFER_ENTRY_START + (chNo * BUFFER_QUEUE_DEPTH) + ((headNo + i) % BUFFER_QUEUE_DEPTH);
-                if(Lsa2ZoneId(dataBufMapPtr->dataBuf[bufferEntry].logicalSliceAddr) == zoneId){
-                    dataBufMapPtr->dataBuf[bufferEntry].dirty = DATA_BUF_CLEAN;
-                }
             }
         }
     }

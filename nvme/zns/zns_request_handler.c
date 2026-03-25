@@ -15,11 +15,10 @@ P_ZONE_MAP zoneMapPtr;
 P_VALID_BLOCK_GROUP_FIFO validBlockGroupFifoPtr;
 P_ZONE_WRITE_BUFFER_MAP zoneWriteBufMapPtr;
 P_UNI_BUF_REG uniBufRegPtr;
-P_BUFFER_QUEUE_MAP bufferQueueMapPtr;
 
 // Bad block tuples (Assume the tuples are sorted and not overlapped)
 // {4052, 4057} means virtual blocks 4052 - 4057 are bad blocks
-int BadBlockTuples[] = {4052, 4057};
+int BadBlockTuples[] = {4052, 4053, 4064, 4065, 4074, 4075};
 
 void InitZNS()
 {	
@@ -42,15 +41,6 @@ void InitZNS()
 	if(BUFFER_MODE > 0){
 		uniBufRegPtr = (P_UNI_BUF_REG) UNI_BUF_REG_ADDR;
 		uniBufRegPtr->curBufWriteIdx = -1;
-		if(BUFFER_MODE == 2){
-			int i;
-			for(i = 0; i < 8; i++){
-				bufferQueueMapPtr = (P_BUFFER_QUEUE_MAP) BUFFER_QUEUE_MAP_ADDR;
-				bufferQueueMapPtr->bufferQueueReg[i].Num = 0;
-				bufferQueueMapPtr->bufferQueueReg[i].Head = 0;
-				bufferQueueMapPtr->bufferQueueReg[i].Rear = 0;
-			}
-		}
 	}
 	
 	zoneMapPtr = (P_ZONE_MAP) ZONE_MAP_ADDR;
@@ -240,41 +230,6 @@ void bufferIDFifo_Enqueue(unsigned int element){
 	zoneWriteBufMapPtr->Num++;
 }
 
-int chNo_Cal(unsigned int zoneID, unsigned int requestSlotTag){
-	int sliceID, BLOCK_GROUP_ID, chNo;
-
-	sliceID = reqPoolPtr->reqPool[requestSlotTag].logicalSliceAddr - (zoneID * SLICE_PER_ZONE);
-	BLOCK_GROUP_ID = zoneMapPtr->zoneReg[zoneID].Phy_Block_Group_ID;
-	chNo = (((BLOCK_GROUP_ID % BLOCK_GROUP_IN_COLUMN) * NUM_OF_DIE_PER_ZONE) + (sliceID % NUM_OF_DIE_PER_ZONE)) % 8;
-
-	return chNo;
-}
-
-int bufferQueue_Enqueue(unsigned int chNo) {
-    if (bufferQueueMapPtr->bufferQueueReg[chNo].Num < BUFFER_QUEUE_DEPTH) {
-        if (bufferQueueMapPtr->bufferQueueReg[chNo].Num != 0) {
-            bufferQueueMapPtr->bufferQueueReg[chNo].Rear =
-                (bufferQueueMapPtr->bufferQueueReg[chNo].Rear + 1) % BUFFER_QUEUE_DEPTH;
-        }
-        bufferQueueMapPtr->bufferQueueReg[chNo].Num++;
-    } else {
-        assert(!"[WARNING] Buffer Queue Full! [WARNING]");
-    }
-    return bufferQueueMapPtr->bufferQueueReg[chNo].Rear;
-}
-
-void bufferQueue_Dequeue(unsigned int chNo) {
-    if (bufferQueueMapPtr->bufferQueueReg[chNo].Num > 0) {
-        if (bufferQueueMapPtr->bufferQueueReg[chNo].Num != 1) {
-            bufferQueueMapPtr->bufferQueueReg[chNo].Head =
-                (bufferQueueMapPtr->bufferQueueReg[chNo].Head + 1) % BUFFER_QUEUE_DEPTH;
-        }
-        bufferQueueMapPtr->bufferQueueReg[chNo].Num--;
-    } else {
-        assert(!"[WARNING] Buffer Queue Empty! [WARNING]");
-    }
-}
-
 int ZoneWriteCheck(unsigned int zoneID, unsigned int slba, unsigned int nlb){
 	ZONE_REG zoneReg;
 	zoneReg = zoneMapPtr->zoneReg[zoneID];
@@ -312,9 +267,13 @@ int ZoneWriteCheck(unsigned int zoneID, unsigned int slba, unsigned int nlb){
 			bufferID = bufferIDFifo_Dequeue();			
 			zoneWriteBufMapPtr->zoneWriteBufReg[bufferID].ZoneID = zoneID;
 		}
-		else{
+		else if(BUFFER_MODE == 1){
 			bufferID = 0;
 		}		
+		else{
+			assert(!"[Error] Invalid Buffer Mode [Error]");
+		}
+
 		zoneMapPtr->zoneReg[zoneID].Buffer_ID = bufferID;
 		zoneMapPtr->zoneReg[zoneID].Phy_Block_Group_ID = validBlockGroupFifo_Dequeue();
 		//xil_printf("Zone %d (Block Group %d) is implicitly opened\r\n", zoneMapPtr->zoneReg[zoneRegID].Zone_ID, zoneMapPtr->zoneReg[zoneRegID].Phy_Block_Group_ID);
@@ -356,8 +315,11 @@ unsigned int GetZoneDataBuf(unsigned int zoneID, int offset){
 		unsigned int off_idx = (curBufWriteIdx + offset + DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE) % DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE;
 		return ZNS_DATA_BUFFER_ENTRY_START + (bufferID * DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE) + off_idx;
 	}
-	else{
+	else if(BUFFER_MODE == 1){
 		return ZNS_DATA_BUFFER_ENTRY_START + uniBufRegPtr->curBufWriteIdx;
+	}
+	else{
+		assert(!"[Error] Invalid Buffer Mode [Error]");
 	}
 }
 
@@ -367,9 +329,12 @@ void incrementDataBufPointer(unsigned int zoneID){
 		int curBufWriteIdx = zoneWriteBufMapPtr->zoneWriteBufReg[bufferID].curBufWriteIdx;
 		zoneWriteBufMapPtr->zoneWriteBufReg[bufferID].curBufWriteIdx = (curBufWriteIdx + 1) % DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE;
 	}
-	else{
+	else if(BUFFER_MODE == 1){
 		int curBufWriteIdx = uniBufRegPtr->curBufWriteIdx;
 		uniBufRegPtr->curBufWriteIdx = (curBufWriteIdx + 1) % OPEN_ZONE_DATA_BUFFER_ENTRY_COUNT;
+	}
+	else{
+		assert(!"[Error] Invalid Buffer Mode [Error]");
 	}
 }
 
@@ -588,18 +553,13 @@ unsigned int ZNS_AllocateWriteDataBuf(unsigned int zoneID, unsigned int reqSlotT
 		incrementDataBufPointer(zoneID);
 		dataBufEntry = GetZoneDataBuf(zoneID, 0);
 	}
-	else{
-		if(BUFFER_MODE == 1){
-			incrementDataBufPointer(zoneID);
-			dataBufEntry = GetZoneDataBuf(zoneID, 0);
-		}
-		else{
-			int chNo, rearNo;
-			chNo = chNo_Cal(zoneID, reqSlotTag);
-			rearNo = bufferQueue_Enqueue(chNo);
-			dataBufEntry = ZNS_DATA_BUFFER_ENTRY_START + (chNo * BUFFER_QUEUE_DEPTH) + rearNo;
-		}
+	else if(BUFFER_MODE == 1){
+		incrementDataBufPointer(zoneID);
+		dataBufEntry = GetZoneDataBuf(zoneID, 0);
 	}
+	else{
+		assert(!"[Error] Invalid Buffer Mode [Error]");
+	}	
 
 	return dataBufEntry;
 }
@@ -637,23 +597,6 @@ void ZNS_EvictDataBufEntry(unsigned int zoneID, unsigned int originReqSlotTag){
 		int evictIdx = (curBufWriteIdx + (EVICTION_OFFSET + OPEN_ZONE_DATA_BUFFER_ENTRY_COUNT)) % OPEN_ZONE_DATA_BUFFER_ENTRY_COUNT;
 		dataBufEntry = ZNS_DATA_BUFFER_ENTRY_START + evictIdx;
 	}
-	else if(BUFFER_MODE == 2){
-		int chNoTmp = chNo_Cal(zoneID, originReqSlotTag);
-		int chNo = chNoTmp;
-		int i;
-		for(i = 0; i < 8; i++){
-			int checkChNo = (chNoTmp + i) % 8;
-			ZNS_bufferQueueDequeueUntilDirty(checkChNo);
-			if(bufferQueueMapPtr->bufferQueueReg[checkChNo].Num > 0){
-				chNo = checkChNo;
-				break;
-			}
-		}
-		if(i == 8)
-			return;
-
-		dataBufEntry = ZNS_DATA_BUFFER_ENTRY_START + (chNo * BUFFER_QUEUE_DEPTH) + bufferQueueMapPtr->bufferQueueReg[chNo].Head;
-	}
 	else{
 		assert(!"[Error] Invalid Buffer Mode [Error]");
 	}		
@@ -682,21 +625,6 @@ void ZNS_EvictDataBufEntry(unsigned int zoneID, unsigned int originReqSlotTag){
 		dataBufMapPtr->dataBuf[dataBufEntry].dirty = DATA_BUF_CLEAN;
 	}
 }
-
-void ZNS_bufferQueueDequeueUntilDirty(int chNo){
-	int headBuffer;
-
-	while(bufferQueueMapPtr->bufferQueueReg[chNo].Num > 0){
-		headBuffer = ZNS_DATA_BUFFER_ENTRY_START + (chNo * BUFFER_QUEUE_DEPTH) + bufferQueueMapPtr->bufferQueueReg[chNo].Head;		
-		if(dataBufMapPtr->dataBuf[headBuffer].dirty == DATA_BUF_DIRTY){
-			break;
-		}
-		else{
-			bufferQueue_Dequeue(chNo);
-		}
-	}
-}
-
 
 void ZNS_EvictAllDataBufEntry(unsigned int zoneID, unsigned int originReqSlotTag){
 	unsigned int reqSlotTag, virtualSliceAddr, dataBufEntry;

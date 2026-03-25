@@ -23,8 +23,6 @@ unsigned int bufferIDFifo_Dequeue();
 
 void bufferIDFifo_Enqueue(unsigned int element);
 
-int chNo_Cal(unsigned int zoneID, unsigned int requestSlotTag);
-
 int bufferQueue_Enqueue(unsigned int chNo);
 
 void bufferQueue_Dequeue(unsigned int chNo);
