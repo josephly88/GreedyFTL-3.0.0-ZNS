@@ -27,6 +27,8 @@ void wrr_init();
 
 void wrr_build_schedule();
 
+void wrr_increment(int zoneID);
+
 int ZoneWriteCheck(unsigned int zoneID, unsigned int slba, unsigned int numOfSlice);
 
 int ZoneReadCheck(unsigned int zoneID, unsigned int slba, unsigned int nlb);

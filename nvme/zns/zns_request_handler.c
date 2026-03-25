@@ -78,6 +78,11 @@ void InitZNS()
 	for(i = 0; i < SLICE_PER_STRIPE; i++){
 		zoneMapPtr->readBufPtr[i] = 0;
 	}
+
+	// Example: seed once during initialization
+	XTime t;
+	XTime_GetTime(&t);
+	srand((unsigned int)t);
 }
 
 void parameterCheck(){
@@ -294,8 +299,8 @@ int wrr_zone_pending() {
         int zone_id = wrrPtr->schedule[wrrPtr->schedule_index];
 
         if (zoneMapPtr->zoneReg[zone_id].Zone_State == IMPLICITLY_OPENED ||
-            zoneMapPtr->zoneReg[zone_id].Zone_State == EXPLICITLY_OPENED) {
-            
+            zoneMapPtr->zoneReg[zone_id].Zone_State == EXPLICITLY_OPENED ||
+			zoneMapPtr->zoneReg[zone_id].Zone_State == FULL) {
             if (wrrPtr->buffer_count[zone_id] > 0) {
                 int ret = zone_id;
 
@@ -303,16 +308,27 @@ int wrr_zone_pending() {
                 return ret;
             }
         }
-
         // Advance index and keep searching
         wrrPtr->schedule_index = (wrrPtr->schedule_index + 1) % 682;
     }
 
     // If we scanned the whole schedule and found nothing, assert
+    xil_printf("[DEBUG] Entering wrr_zone_pending: total_buffer_count=%d, schedule_index=%d\r\n",
+               wrrPtr->total_buffer_count, wrrPtr->schedule_index);
+
+    for (i = 0; i < MAXIMUM_OPEN_ZONE_COUNT; i++) {
+		xil_printf("    Zone %d: buffer_count=%d, state=%d\r\n",
+					i, wrrPtr->buffer_count[i], zoneMapPtr->zoneReg[i].Zone_State);
+    }
+
     assert(!"No pending zone found in WRR schedule");
     return -1; // defensive return
 }
 
+void wrr_increment(int zoneID){
+	wrrPtr->total_buffer_count += 1;
+	wrrPtr->buffer_count[zoneID] += 1;		
+}
 
 int ZoneWriteCheck(unsigned int zoneID, unsigned int slba, unsigned int nlb){
 	ZONE_REG zoneReg;
@@ -600,6 +616,9 @@ void ZNS_ReqTransSliceToLowLevel(unsigned int reqSlotTag){
 		reqPoolPtr->reqPool[reqSlotTag].dataBufInfo.entry = dataBufEntry;
 
 		ZNS_EvictDataBufEntry(zoneID, reqSlotTag);
+		if(BUFFER_MODE == 0 && NON_SHARE_ZONE_BALANCE == 1){
+			wrr_increment(zoneID);
+		}
 
 		dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr = reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr;
 
@@ -647,11 +666,6 @@ unsigned int ZNS_AllocateWriteDataBuf(unsigned int zoneID, unsigned int reqSlotT
 		assert(!"[Error] Invalid Buffer Mode [Error]");
 	}	
 
-	if(BUFFER_MODE == 0 && NON_SHARE_ZONE_BALANCE == 1){
-		wrrPtr->total_buffer_count += 1;
-		wrrPtr->buffer_count[zoneID] += 1;
-	}		
-
 	return dataBufEntry;
 }
 
@@ -681,10 +695,11 @@ void ZNS_EvictDataBufEntry(unsigned int zoneID, unsigned int originReqSlotTag){
 				int bufferID = zoneMapPtr->zoneReg[evict_zoneID].Buffer_ID;
 				int dirtyIdx = zoneWriteBufMapPtr->zoneWriteBufReg[bufferID].dirtyBufIdx;
 				dataBufEntry = ZNS_DATA_BUFFER_ENTRY_START + (bufferID * DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE) + dirtyIdx;
-
+				
 				zoneWriteBufMapPtr->zoneWriteBufReg[bufferID].dirtyBufIdx = (dirtyIdx + 1) % DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE;
 				wrrPtr->buffer_count[evict_zoneID] -= 1;
 				wrrPtr->total_buffer_count -= 1;
+
 			}
 			else{
 				int bufferID = zoneMapPtr->zoneReg[zoneID].Buffer_ID;
