@@ -23,7 +23,7 @@ unsigned int bufferIDFifo_Dequeue();
 
 void bufferIDFifo_Enqueue(unsigned int element);
 
-void wrr_assign_weight();
+void wrr_init();
 
 void wrr_build_schedule();
 

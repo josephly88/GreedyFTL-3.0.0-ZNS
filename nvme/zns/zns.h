@@ -29,10 +29,12 @@
 
 // 0: Per-zone, 1: Unified
 #define BUFFER_MODE											(0)		
-#define NON_SHARE_ZONE_BALANCE								(1)
 #define ADDITION_DATA_BUFFER_PER_OPEN_ZONE					(0)	// 2-stripe would be (SLICE_PER_STRIPE)
 // Options: -1 (Last), N/2 (N/2 Ping-Pong)
 #define EVICTION_OFFSET										(-1)    
+// Only for BUFFER_MODE 0 for ZONE eviction balance
+#define NON_SHARE_ZONE_BALANCE								(1)
+#define EVICTION_THRESHOLD									(10)
 
 // Each Entry is a slice (16KB)
 #define ACTIVE_ZONE_READ_BUFFER_ENTRY_COUNT					(64)		
@@ -95,7 +97,6 @@ typedef struct _ZONE_REG
     unsigned int Write_Pointer;
 	int Buffer_ID;
 	int Phy_Block_Group_ID;
-	unsigned int Cur_Phy_Idx;
 } ZONE_REG;
 
 typedef struct _ZONE_MAP
@@ -118,6 +119,7 @@ typedef struct _ZONE_WRITE_BUF_REG
 {
 	int ZoneID;
 	int curBufWriteIdx;
+	int dirtyBufIdx;
 } ZONE_WRITE_BUF_REG;
 
 typedef struct _ZONE_WRITE_BUFFER_MAP
@@ -138,7 +140,9 @@ typedef struct _WRR
 {
 	int weight[MAXIMUM_OPEN_ZONE_COUNT];
 	int schedule[682];
-	int schdeule_index;
+	int schedule_index;
+	int total_buffer_count;
+	int buffer_count[MAXIMUM_OPEN_ZONE_COUNT];
 } WRR, *P_WRR;
 
 /*-------------------------------------------------------------

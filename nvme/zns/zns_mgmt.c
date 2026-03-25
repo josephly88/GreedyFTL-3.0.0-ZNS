@@ -142,12 +142,19 @@ void resetZone(unsigned int zoneId){
     int BufferIdx, DieIdx;
     ZONE_REG zoneReg = zoneMapPtr->zoneReg[zoneId];
     int zoneBufferID = zoneReg.Buffer_ID;
+    P_WRR wrrPtr = (P_WRR) WRR_ADDR;
 
     // Clear all write buffers
     if(BUFFER_MODE == 0){
         for(BufferIdx = 0; BufferIdx < DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE; BufferIdx++){
             unsigned int dataBufEntry = ZNS_DATA_BUFFER_ENTRY_START + (zoneBufferID * DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE) + BufferIdx;
             dataBufMapPtr->dataBuf[dataBufEntry].dirty = DATA_BUF_CLEAN;
+        }
+
+        if(NON_SHARE_ZONE_BALANCE == 1){
+            int cnt = wrrPtr->buffer_count[zoneId];
+            wrrPtr->buffer_count[zoneId] = 0;
+            wrrPtr->total_buffer_count -= cnt;
         }
     }
     else if(BUFFER_MODE == 1){
