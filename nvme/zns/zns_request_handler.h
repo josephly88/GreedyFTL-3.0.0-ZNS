@@ -23,6 +23,10 @@ unsigned int bufferIDFifo_Dequeue();
 
 void bufferIDFifo_Enqueue(unsigned int element);
 
+void wrr_assign_weight();
+
+void wrr_build_schedule();
+
 int ZoneWriteCheck(unsigned int zoneID, unsigned int slba, unsigned int numOfSlice);
 
 int ZoneReadCheck(unsigned int zoneID, unsigned int slba, unsigned int nlb);

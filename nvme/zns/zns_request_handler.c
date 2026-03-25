@@ -15,6 +15,7 @@ P_ZONE_MAP zoneMapPtr;
 P_VALID_BLOCK_GROUP_FIFO validBlockGroupFifoPtr;
 P_ZONE_WRITE_BUFFER_MAP zoneWriteBufMapPtr;
 P_UNI_BUF_REG uniBufRegPtr;
+P_WRR wrrPtr;
 
 // Bad block tuples (Assume the tuples are sorted and not overlapped)
 // {4052, 4057} means virtual blocks 4052 - 4057 are bad blocks
@@ -38,7 +39,12 @@ void InitZNS()
 	shuffleValidBlockGroups();
 	validBlockGroupFifoPtr->Num = validBlockGroupFifoPtr->Valid_Count;
 
-	if(BUFFER_MODE > 0){
+	if(BUFFER_MODE == 0 && NON_SHARE_ZONE_BALANCE == 1){
+		wrr_assign_weight();
+		wrr_build_schedule();
+	}
+
+	if(BUFFER_MODE == 1){
 		uniBufRegPtr = (P_UNI_BUF_REG) UNI_BUF_REG_ADDR;
 		uniBufRegPtr->curBufWriteIdx = -1;
 	}
@@ -228,6 +234,72 @@ void bufferIDFifo_Enqueue(unsigned int element){
 	zoneWriteBufMapPtr->FIFO_LIST[zoneWriteBufMapPtr->Rear] = element;
 
 	zoneWriteBufMapPtr->Num++;
+}
+
+void wrr_assign_weight() {
+    int i;
+    for (i = 0; i < MAXIMUM_OPEN_ZONE_COUNT; i++) {
+        if (i >= 0 && i <= 1) {
+            wrrPtr->weight[i] = 1;
+        } else if (i >= 2 && i <= 5) {
+            wrrPtr->weight[i] = 2;
+        } else if (i >= 6 && i <= 13) {
+            wrrPtr->weight[i] = 4;
+        } else if (i >= 14 && i <= 29) {
+            wrrPtr->weight[i] = 8;
+        } else if (i >= 30 && i <= 61) {
+            wrrPtr->weight[i] = 16;
+        } else {
+            wrrPtr->weight[i] = 0; // default if outside defined ranges
+        }
+    }
+}
+
+void wrr_build_schedule() {
+    int total_slots = 682;  // fixed length
+    int i, k;
+
+    // Initialize schedule with -1 (empty)
+    for (i = 0; i < total_slots; i++) {
+        wrrPtr->schedule[i] = -1;
+    }
+
+    // Place each zone's entries evenly spaced
+    for (i = MAXIMUM_OPEN_ZONE_COUNT-1; i >= 0; i--) {
+        int w = wrrPtr->weight[i];
+        if (w > 0) {
+            double stride = (double)total_slots / w;
+            for (k = 0; k < w; k++) {
+                int pos = (int)(k * stride) % total_slots;
+                // If slot already filled, move forward until empty
+                while (wrrPtr->schedule[pos] != -1) {
+                    pos = (pos + 1) % total_slots;
+                }
+                wrrPtr->schedule[pos] = i;
+            }
+        }
+    }
+
+    // Debug print
+    xil_printf("Weighted Round-Robin Schedule (length=%d):\r\n", total_slots);
+    for (i = 0; i < total_slots; i++) {
+        xil_printf("%d ", wrrPtr->schedule[i]);
+        if ((i + 1) % 32 == 0) {
+            xil_printf("\r\n");
+        }
+    }
+    xil_printf("\r\n");
+
+    // Optional: per-zone count check
+    for (i = 0; i < MAXIMUM_OPEN_ZONE_COUNT; i++) {
+        int count = 0;
+        for (k = 0; k < total_slots; k++) {
+            if (wrrPtr->schedule[k] == i) count++;
+        }
+        if (count > 0) {
+            xil_printf("Zone %d appears %d times\r\n", i, count);
+        }
+    }
 }
 
 int ZoneWriteCheck(unsigned int zoneID, unsigned int slba, unsigned int nlb){

@@ -27,8 +27,9 @@
 
 // Each Stripe is NUM_OF_DIE_PER_ZONE
 
-// 0: Per-zone, 1: Unified, 2: Unified PU-Aware
-#define BUFFER_MODE											(2)		
+// 0: Per-zone, 1: Unified
+#define BUFFER_MODE											(0)		
+#define NON_SHARE_ZONE_BALANCE								(1)
 #define ADDITION_DATA_BUFFER_PER_OPEN_ZONE					(0)	// 2-stripe would be (SLICE_PER_STRIPE)
 // Options: -1 (Last), N/2 (N/2 Ping-Pong)
 #define EVICTION_OFFSET										(-1)    
@@ -132,6 +133,13 @@ typedef struct _UNI_BUF_REG
 {
 	int curBufWriteIdx;
 } UNI_BUF_REG, *P_UNI_BUF_REG;
+
+typedef struct _WRR
+{
+	int weight[MAXIMUM_OPEN_ZONE_COUNT];
+	int schedule[682];
+	int schdeule_index;
+} WRR, *P_WRR;
 
 /*-------------------------------------------------------------
 		Section : NVMe ZNS Command Specification
