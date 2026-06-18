@@ -33,6 +33,14 @@ void InitZNS()
 	xil_printf("- ZONE_BLOCK_GROUP_START: %d\r\n", ZONE_BLOCK_GROUP_START);
 	xil_printf("\r\n");
 
+	unsigned int size = 0;
+	size += RESERVED_DATA_BUFFER_BASE_ADDR + (TEMPORARY_SPARE_DATA_BUFFER_BASE_ADDR + AVAILABLE_TEMPORARY_DATA_BUFFER_ENTRY_COUNT * BYTES_PER_SPARE_REGION_OF_SLICE) - DATA_BUFFER_BASE_ADDR;
+	size += TEMPORARY_PAY_LOAD_ADDR + sizeof(TEMPORARY_DATA_BUF_MAP) - COMPLETE_FLAG_TABLE_ADDR;
+	size += sizeof(DATA_BUF_MAP) + sizeof(GC_VICTIM_MAP) + sizeof(REQ_POOL);
+	size += FTL_MANAGEMENT_END_ADDR - DIE_STATE_TABLE_ADDR;
+	size += ZNS_MANAGEMENT_END_ADDR - ZNS_MANAGEMENT_START_ADDR;
+	xil_printf("- ZNS_FTL_TOTAL_SIZE: %x\r\n", size);
+
 	XTime t;
 	XTime_GetTime(&t);
 	srand((unsigned int)t);
@@ -252,11 +260,10 @@ void wrr_init() {
 }
 
 int wrr_get_zone_weight(int zoneID) {
-    if (zoneID >= 0 && zoneID <= 1) return 1;
-    else if (zoneID >= 2 && zoneID <= 5) return 2;
-    else if (zoneID >= 6 && zoneID <= 13) return 4;
-    else if (zoneID >= 14 && zoneID <= 29) return 8;
-    else if (zoneID >= 30 && zoneID <= 61) return 16;
+    if (zoneID >= 0 && zoneID <= 5) return 1;
+    else if (zoneID >= 6 && zoneID <= 9) return 2;
+    else if (zoneID >= 10 && zoneID <= 13) return 4;
+    else if (zoneID >= 14 && zoneID <= 29) return 16;
     else return 0;
 }
 
@@ -314,12 +321,28 @@ int wrr_select_zone_probability() {
 }
 
 int weighted_buffer_size(int zoneID) {
-    if (zoneID >= 0 && zoneID <= 1) return DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE/16;
+	/*
+	// Zipfian
+	if (zoneID >= 0 && zoneID <= 1) return DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE/16;
     else if (zoneID >= 2 && zoneID <= 5) return DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE/8;
     else if (zoneID >= 6 && zoneID <= 13) return DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE/4;
     else if (zoneID >= 14 && zoneID <= 29) return DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE/2;
     else if (zoneID >= 30 && zoneID <= 61) return DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE;
     else return 0;
+	*/
+
+	/*
+	//Pareto
+	if (zoneID >= 0 && zoneID <= 5) return DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE/16;
+    else if (zoneID >= 6 && zoneID <= 9) return DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE/8;
+    else if (zoneID >= 10 && zoneID <= 13) return DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE/4;
+    else if (zoneID >= 14 && zoneID <= 29) return DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE;
+    else return 0;
+	*/
+
+	//Fair_Mix_1
+	
+    
 }
 
 int ZoneWriteCheck(unsigned int zoneID, unsigned int slba, unsigned int nlb){
@@ -335,7 +358,7 @@ int ZoneWriteCheck(unsigned int zoneID, unsigned int slba, unsigned int nlb){
 
 	// Sequential Write Check
 	if(zoneReg.Write_Pointer != slba){
-		xil_printf("Sequential Write Error: WP: %x SLBA: %x\r\n", zoneReg.Write_Pointer, slba);
+		xil_printf("Sequential Write Error: WP: %x SLBA: %x nlb+1 : %d\r\n", zoneReg.Write_Pointer, slba, nlb);
 		return -1;
 	}
 
@@ -703,7 +726,7 @@ void ZNS_EvictDataBufEntry(unsigned int zoneID, unsigned int originReqSlotTag){
 				wrrPtr->buffer_count[evict_zoneID] -= 1;
 				wrrPtr->total_buffer_count -= 1;	
 
-				/*
+				
 				xil_printf("[DEBUG] evict_zone=%d weight=%d bufferID=%d dirtyIdx=%d bufCount=%d totalBuf=%d totalWeight=%d listLen=%d\r\n",
 					evict_zoneID,
 					wrr_get_zone_weight(evict_zoneID),
@@ -713,7 +736,7 @@ void ZNS_EvictDataBufEntry(unsigned int zoneID, unsigned int originReqSlotTag){
 					wrrPtr->total_buffer_count,
 					wrrPtr->total_weight,
 					wrrPtr->listLength);
-					*/
+					
 
 				if(wrrPtr->buffer_count[evict_zoneID] == 0){
 					wrr_remove_zone(evict_zoneID);
