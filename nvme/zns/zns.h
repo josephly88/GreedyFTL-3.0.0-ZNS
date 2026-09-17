@@ -33,7 +33,7 @@
 // Options: -1 (Last), N/2 (N/2 Ping-Pong)
 #define EVICTION_OFFSET										(-1)    
 // Only for BUFFER_MODE 0, MOD 1 is Weight Balance Evictoin, MOD 2 is Sizing, MOD 3 is Weight Balance Eviction + Sizing
-#define NON_SHARE_MOD										(2)
+#define NON_SHARE_MOD										(0)
 #define EVICTION_THRESHOLD									(16)
 
 // Each Entry is a slice (16KB)
