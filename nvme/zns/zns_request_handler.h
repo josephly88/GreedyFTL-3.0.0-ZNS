@@ -5,6 +5,8 @@
 
 void InitZNS();
 
+void ZnsAbortNvmeIo(unsigned int cmdSlotTag, unsigned char sct, unsigned char sc, unsigned char dnr);
+
 void parameterCheck();
 
 void resetZoneReg(int ZoneRegID);
@@ -35,9 +37,11 @@ int wrr_select_zone_probability();
 
 int weighted_buffer_size(int zoneID);
 
-int ZoneWriteCheck(unsigned int zoneID, unsigned int slba, unsigned int numOfSlice);
+int ZoneWriteCheck(unsigned int zoneID, unsigned int slba, unsigned int nlb,
+	unsigned char *sct, unsigned char *sc, unsigned char *dnr);
 
-int ZoneReadCheck(unsigned int zoneID, unsigned int slba, unsigned int nlb);
+int ZoneReadCheck(unsigned int zoneID, unsigned int slba, unsigned int nlb,
+	unsigned char *sct, unsigned char *sc, unsigned char *dnr);
 
 unsigned int GetZoneDataBuf(unsigned int zoneID, int offset);
 

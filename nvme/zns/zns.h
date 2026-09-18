@@ -16,8 +16,8 @@
 
 #define SLICE_PER_STRIPE									(NUM_OF_DIE_PER_ZONE)
 
-#define MAXIMUM_OPEN_ZONE_COUNT                  			62
-#define MAXIMUM_ACTIVE_ZONE_COUNT                  			62
+#define MAXIMUM_OPEN_ZONE_COUNT                  			10
+#define MAXIMUM_ACTIVE_ZONE_COUNT                  			10
 #define ZNS_LBA_START_NVME_BLOCK							0x800000	// 0x800000 * 0x1000 (NVMe Block Size: 4KB) = 32GB
 
 // 0-Channel Oriented, 1-Way Oriented
@@ -163,6 +163,15 @@ typedef struct _WRR
 #define READ_ONLY											0xD
 #define FULL												0xE
 #define OFFLINE												0xF
+
+/* ZNS Command Set 1.1 command-specific status (SCT = 1) */
+#define SC_ZONED_BOUNDARY_ERROR								0xB8
+#define SC_ZONE_IS_FULL										0xB9
+#define SC_ZONE_IS_READ_ONLY								0xBA
+#define SC_ZONE_IS_OFFLINE									0xBB
+#define SC_ZONE_INVALID_WRITE								0xBC
+#define SC_TOO_MANY_ACTIVE_ZONES							0xBD
+#define SC_TOO_MANY_OPEN_ZONES								0xBE
 
 /* Zone Mangaement Send Zone Send Action (ZSA) */
 #define CLOSE_ZONE											0x1

@@ -21,6 +21,18 @@ P_WRR wrrPtr;
 // {4052, 4057} means virtual blocks 4052 - 4057 are bad blocks
 int BadBlockTuples[] = {4052, 4053, 4064, 4065, 4074, 4075};
 
+void ZnsAbortNvmeIo(unsigned int cmdSlotTag, unsigned char sct, unsigned char sc, unsigned char dnr)
+{
+	NVME_COMPLETION cpl;
+
+	cpl.dword[0] = 0;
+	cpl.statusField.SCT = sct;
+	cpl.statusField.SC = sc;
+	cpl.statusField.DNR = dnr;
+	cpl.specific = 0;
+	set_auto_nvme_cpl(cmdSlotTag, cpl.specific, cpl.statusFieldWord);
+}
+
 void InitZNS()
 {	
 	parameterCheck();
@@ -345,32 +357,63 @@ int weighted_buffer_size(int zoneID) {
     
 }
 
-int ZoneWriteCheck(unsigned int zoneID, unsigned int slba, unsigned int nlb){
+int ZoneWriteCheck(unsigned int zoneID, unsigned int slba, unsigned int nlb,
+	unsigned char *sct, unsigned char *sc, unsigned char *dnr){
 	ZONE_REG zoneReg;
 	zoneReg = zoneMapPtr->zoneReg[zoneID];
 
-	// Zone State Check
+	if(zoneReg.Zone_State == FULL){
+		xil_printf("Zone [%d] Zone State Error: %d\r\n", zoneID, zoneReg.Zone_State);
+		*sct = SCT_COMMAND_SPECIFIC_STATUS;
+		*sc = SC_ZONE_IS_FULL;
+		*dnr = 1;
+		return -1;
+	}
+	if(zoneReg.Zone_State == READ_ONLY){
+		xil_printf("Zone [%d] Zone State Error: %d\r\n", zoneID, zoneReg.Zone_State);
+		*sct = SCT_COMMAND_SPECIFIC_STATUS;
+		*sc = SC_ZONE_IS_READ_ONLY;
+		*dnr = 1;
+		return -1;
+	}
+	if(zoneReg.Zone_State == OFFLINE){
+		xil_printf("Zone [%d] Zone State Error: %d\r\n", zoneID, zoneReg.Zone_State);
+		*sct = SCT_COMMAND_SPECIFIC_STATUS;
+		*sc = SC_ZONE_IS_OFFLINE;
+		*dnr = 1;
+		return -1;
+	}
 	if(zoneReg.Zone_State != IMPLICITLY_OPENED && zoneReg.Zone_State != EXPLICITLY_OPENED
 	 && zoneReg.Zone_State != CLOSED && zoneReg.Zone_State != EMPTY){
 		xil_printf("Zone [%d] Zone State Error: %d\r\n", zoneID, zoneReg.Zone_State);
+		*sct = SCT_GENERIC_COMMAND_STATUS;
+		*sc = SC_INVALID_FIELD_IN_COMMAND;
+		*dnr = 1;
 		return -1;
 	}
 
-	// Sequential Write Check
 	if(zoneReg.Write_Pointer != slba){
 		xil_printf("Sequential Write Error: WP: %x SLBA: %x nlb+1 : %d\r\n", zoneReg.Write_Pointer, slba, nlb);
+		*sct = SCT_COMMAND_SPECIFIC_STATUS;
+		*sc = SC_ZONE_INVALID_WRITE;
+		*dnr = 1;
 		return -1;
 	}
 
-	// Out-of-Bound Check
 	if(zoneReg.Write_Pointer + nlb > zoneReg.SLBA + NVME_BLOCKS_PER_ZONE){
 		xil_printf("Out-of-Bound Error: WP: %x SLBA: %x nlb+1 : %d\r\n", zoneReg.Write_Pointer, slba, nlb);
+		*sct = SCT_COMMAND_SPECIFIC_STATUS;
+		*sc = SC_ZONED_BOUNDARY_ERROR;
+		*dnr = 1;
 		return -1;
 	}
 	
 	if(zoneMapPtr->zoneReg[zoneID].Zone_State == EMPTY){
 		if(zoneMapPtr->Num_Open_Zone >= MAXIMUM_OPEN_ZONE_COUNT){
 			xil_printf("Maximum Open Zone Count Reached: %d\r\n", MAXIMUM_OPEN_ZONE_COUNT);
+			*sct = SCT_COMMAND_SPECIFIC_STATUS;
+			*sc = SC_TOO_MANY_ACTIVE_ZONES;
+			*dnr = 0;
 			return -1;
 		}
 		zoneMapPtr->zoneReg[zoneID].Zone_State = IMPLICITLY_OPENED;
@@ -404,19 +447,24 @@ int ZoneWriteCheck(unsigned int zoneID, unsigned int slba, unsigned int nlb){
     return zoneMapPtr->zoneReg[zoneID].Buffer_ID;
 }
 
-int ZoneReadCheck(unsigned int zoneID, unsigned int slba, unsigned int nlb){
+int ZoneReadCheck(unsigned int zoneID, unsigned int slba, unsigned int nlb,
+	unsigned char *sct, unsigned char *sc, unsigned char *dnr){
 	ZONE_REG zoneReg;
 	zoneReg = zoneMapPtr->zoneReg[zoneID];
 
-	// Zone State Check
-	if(zoneReg.Zone_State == EMPTY || zoneReg.Zone_State == OFFLINE){
+	if(zoneReg.Zone_State == OFFLINE){
 		xil_printf("Zone State Error: %d\r\n", zoneReg.Zone_State);
+		*sct = SCT_COMMAND_SPECIFIC_STATUS;
+		*sc = SC_ZONE_IS_OFFLINE;
+		*dnr = 1;
 		return -1;
 	}
 
-	// Out-of-Bound Check
-	if(slba + nlb >= zoneReg.Write_Pointer){
+	if(slba + nlb > zoneReg.SLBA + NVME_BLOCKS_PER_ZONE){
 		xil_printf("Out-of-Bound Error: WP: %x SLBA: %x nlb+1 : %d\r\n", zoneReg.Write_Pointer, slba, nlb);
+		*sct = SCT_COMMAND_SPECIFIC_STATUS;
+		*sc = SC_ZONED_BOUNDARY_ERROR;
+		*dnr = 1;
 		return -1;
 	}
 

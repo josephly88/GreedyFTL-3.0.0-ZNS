@@ -100,23 +100,30 @@ void ReqTransNvmeToSlice(unsigned int cmdSlotTag, unsigned int startLba, unsigne
 			//xil_printf("Before: tempLsa = %d\r\n", tempLsa);
 
 			unsigned int zoneID = Lba2ZoneId(startLba);
+			unsigned char sct, sc, dnr;
 			if(zoneID < 0 || zoneID >= MAXIMUM_ACTIVE_ZONE_COUNT){
 				xil_printf("Zone Reg ID Error: %d\r\n", zoneID);
+				ZnsAbortNvmeIo(cmdSlotTag, SCT_GENERIC_COMMAND_STATUS, SC_LBA_OUT_OF_RANGE, 1);
 				return;
 			}
 
 			if(cmdCode == IO_NVM_WRITE){
-				if(ZoneWriteCheck(zoneID, startLba, requestedNvmeBlock) < 0)
+				if(ZoneWriteCheck(zoneID, startLba, requestedNvmeBlock, &sct, &sc, &dnr) < 0){
+					ZnsAbortNvmeIo(cmdSlotTag, sct, sc, dnr);
 					return;
+				}
 				reqCode = REQ_CODE_ZONE_WRITE;
 			}
 			else if(cmdCode == IO_NVM_READ){
-				if(ZoneReadCheck(zoneID, startLba, requestedNvmeBlock) < 0)
+				if(ZoneReadCheck(zoneID, startLba, requestedNvmeBlock, &sct, &sc, &dnr) < 0){
+					ZnsAbortNvmeIo(cmdSlotTag, sct, sc, dnr);
 					return;
+				}
 				reqCode = REQ_CODE_ZONE_READ;
 			}
 			else{
 				assert(!"[WARNING] Not supported command code [WARNING]");
+				ZnsAbortNvmeIo(cmdSlotTag, SCT_GENERIC_COMMAND_STATUS, SC_INVALID_COMMAND_OPCODE, 1);
 				return;
 			}
 
