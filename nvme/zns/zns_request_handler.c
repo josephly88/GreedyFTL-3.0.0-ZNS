@@ -671,6 +671,31 @@ void PutToZoneDataBufHashList(unsigned int bufEntry)
 	}
 }
 
+static int ZnsWriteSliceIncomplete(unsigned int zoneID, unsigned int logicalSliceAddr)
+{
+	unsigned int wp, slba, zoneEnd, wpLsa;
+
+	if(zoneID >= MAXIMUM_ACTIVE_ZONE_COUNT)
+		return 0;
+	if(logicalSliceAddr == LSA_NONE)
+		return 0;
+
+	wp = zoneMapPtr->zoneReg[zoneID].Write_Pointer;
+	slba = zoneMapPtr->zoneReg[zoneID].SLBA;
+	zoneEnd = slba + NVME_BLOCKS_PER_ZONE;
+	if(wp >= zoneEnd)
+		return 0;
+
+	wpLsa = (zoneID * SLICE_PER_ZONE) + ((wp / NVME_BLOCKS_PER_SLICE) % SLICE_PER_ZONE);
+	return (logicalSliceAddr == wpLsa);
+}
+
+static void ZnsAbortSliceReq(unsigned int reqSlotTag, unsigned char sct, unsigned char sc, unsigned char dnr)
+{
+	ZnsAbortNvmeIo(reqPoolPtr->reqPool[reqSlotTag].nvmeCmdSlotTag, sct, sc, dnr);
+	PutToFreeReqQ(reqSlotTag);
+}
+
 void ZNS_ReqTransSliceToLowLevel(unsigned int reqSlotTag){
     unsigned int zoneID, dataBufEntry;
 
@@ -679,17 +704,45 @@ void ZNS_ReqTransSliceToLowLevel(unsigned int reqSlotTag){
 	//transform this slice request to nvme request
 	if(reqPoolPtr->reqPool[reqSlotTag].reqCode  == REQ_CODE_ZONE_WRITE)
 	{
-		dataBufEntry = ZNS_AllocateWriteDataBuf(zoneID, reqSlotTag);
-		reqPoolPtr->reqPool[reqSlotTag].dataBufInfo.entry = dataBufEntry;
+		unsigned int nvmeBlockOffset = reqPoolPtr->reqPool[reqSlotTag].nvmeDmaInfo.nvmeBlockOffset;
+		unsigned int numOfNvmeBlock = reqPoolPtr->reqPool[reqSlotTag].nvmeDmaInfo.numOfNvmeBlock;
+		unsigned int bufHit;
 
-		ZNS_EvictDataBufEntry(zoneID, reqSlotTag);
+		if((nvmeBlockOffset + numOfNvmeBlock) > NVME_BLOCKS_PER_SLICE){
+			ZnsAbortSliceReq(reqSlotTag, SCT_GENERIC_COMMAND_STATUS, SC_INTERNAL_DEVICE_ERROR, 1);
+			return;
+		}
 
-		dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr = reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr;
+		if(zoneMapPtr->zoneReg[zoneID].Buffer_ID == -1){
+			ZnsAbortSliceReq(reqSlotTag, SCT_GENERIC_COMMAND_STATUS, SC_INTERNAL_DEVICE_ERROR, 1);
+			return;
+		}
+
+		dataBufEntry = checkZoneWriteDataBuf(reqSlotTag, zoneID);
+		bufHit = (dataBufEntry != DATA_BUF_FAIL);
+
+		if(!bufHit){
+			dataBufEntry = ZNS_AllocateWriteDataBuf(zoneID, reqSlotTag);
+			if(dataBufEntry == DATA_BUF_FAIL){
+				ZnsAbortSliceReq(reqSlotTag, SCT_GENERIC_COMMAND_STATUS, SC_INTERNAL_DEVICE_ERROR, 1);
+				return;
+			}
+
+			reqPoolPtr->reqPool[reqSlotTag].dataBufInfo.entry = dataBufEntry;
+			ZNS_EvictDataBufEntry(zoneID, reqSlotTag);
+			dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr = reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr;
+
+			if(numOfNvmeBlock != NVME_BLOCKS_PER_SLICE)
+				ZNS_DataReadFromNand(zoneID, reqSlotTag);
+		}
+		else{
+			reqPoolPtr->reqPool[reqSlotTag].dataBufInfo.entry = dataBufEntry;
+		}
 
 		dataBufMapPtr->dataBuf[dataBufEntry].dirty = DATA_BUF_DIRTY;
 		reqPoolPtr->reqPool[reqSlotTag].reqCode = REQ_CODE_RxDMA;
 
-		if(BUFFER_MODE == 0 && NON_SHARE_MOD == 1){
+		if(!bufHit && BUFFER_MODE == 0 && NON_SHARE_MOD == 1){
 			if(wrrPtr->buffer_count[zoneID] == 0)
 				wrr_add_zone(zoneID);	
 			wrrPtr->total_buffer_count += 1;
@@ -769,6 +822,10 @@ void ZNS_EvictDataBufEntry(unsigned int zoneID, unsigned int originReqSlotTag){
 				int bufferID = zoneMapPtr->zoneReg[evict_zoneID].Buffer_ID;
 				int dirtyIdx = zoneWriteBufMapPtr->zoneWriteBufReg[bufferID].dirtyBufIdx;
 				dataBufEntry = ZNS_DATA_BUFFER_ENTRY_START + (bufferID * DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE) + dirtyIdx;
+
+				if(dataBufMapPtr->dataBuf[dataBufEntry].dirty == DATA_BUF_DIRTY
+					&& ZnsWriteSliceIncomplete(evict_zoneID, dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr))
+					return;
 				
 				zoneWriteBufMapPtr->zoneWriteBufReg[bufferID].dirtyBufIdx = (dirtyIdx + 1) % DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE;
 				wrrPtr->buffer_count[evict_zoneID] -= 1;
@@ -820,8 +877,14 @@ void ZNS_EvictDataBufEntry(unsigned int zoneID, unsigned int originReqSlotTag){
 
 	if(dataBufMapPtr->dataBuf[dataBufEntry].dirty == DATA_BUF_DIRTY)
 	{
+		unsigned int entryLsa = dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr;
+		unsigned int entryZone = Lsa2ZoneId(entryLsa);
+
+		if(ZnsWriteSliceIncomplete(entryZone, entryLsa))
+			return;
+
 		reqSlotTag = GetFromFreeReqQ();
-		virtualSliceAddr = ZNS_AddrTransWrite(dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr);
+		virtualSliceAddr = ZNS_AddrTransWrite(entryLsa);
 
 		reqPoolPtr->reqPool[reqSlotTag].reqType = REQ_TYPE_NAND;
 		reqPoolPtr->reqPool[reqSlotTag].reqCode = REQ_CODE_WRITE;
