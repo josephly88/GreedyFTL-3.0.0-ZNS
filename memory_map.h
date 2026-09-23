@@ -106,9 +106,8 @@
 //for ZNS map tables
 #define ZNS_MANAGEMENT_START_ADDR               (FTL_MANAGEMENT_END_ADDR + 1)
 // for map tables
-#define ZONE_MAP_ADDR                           ZNS_MANAGEMENT_START_ADDR 
-#define ZNS_READ_BUF_HASH_TABLE_ADDR            (ZONE_MAP_ADDR + sizeof(ZONE_MAP))
-#define ZONE_WRITE_BUFFER_MAP_ADDR              (ZNS_READ_BUF_HASH_TABLE_ADDR + sizeof(ZNS_READ_BUF_HASH_TABLE))  
+#define ZONE_MAP_ADDR                           ZNS_MANAGEMENT_START_ADDR
+#define ZONE_WRITE_BUFFER_MAP_ADDR              (ZONE_MAP_ADDR + sizeof(ZONE_MAP))  
 #define VALID_BLOCK_GROUP_FIFO_ADDR             (ZONE_WRITE_BUFFER_MAP_ADDR + sizeof(ZONE_WRITE_BUFFER_MAP)) // Upper Bound: 0x00400000
 #define UNI_BUF_REG_ADDR                       (VALID_BLOCK_GROUP_FIFO_ADDR + sizeof(VALID_BLOCK_GROUP_FIFO))
 #define WRR_ADDR                            (UNI_BUF_REG_ADDR + sizeof(UNI_BUF_REG))

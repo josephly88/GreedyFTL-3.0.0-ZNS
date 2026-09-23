@@ -47,19 +47,13 @@ unsigned int GetZoneDataBuf(unsigned int zoneID, int offset);
 
 void incrementDataBufPointer(unsigned int zoneID);
 
-unsigned int checkZoneWriteDataBuf(unsigned int reqSlotTag, unsigned int zoneID);
+unsigned int CheckPartialSliceWriteBuf(unsigned int reqSlotTag, unsigned int zoneID);
 
-unsigned int checkZoneReadDataBuf(unsigned int reqSlotTag);
-
-unsigned int AllocateZoneDataBuf();
-
-void SelectiveGetFromZoneDataBufHashList(unsigned int bufEntry);
+unsigned int CheckUnevictedSliceBuf(unsigned int reqSlotTag, unsigned int zoneID);
 
 void ZNS_ReqTransSliceToLowLevel(unsigned int reqSlotTag);
 
 unsigned int ZNS_AllocateWriteDataBuf(unsigned int zoneID, unsigned int reqSlotTag);
-
-unsigned int ZNS_AllocateReadDataBuf(unsigned int zoneID, unsigned int reqSlotTag);
 
 void ZNS_EvictDataBufEntry(unsigned int zoneID, unsigned int originReqSlotTag);
 

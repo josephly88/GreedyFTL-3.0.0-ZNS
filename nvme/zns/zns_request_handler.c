@@ -9,6 +9,7 @@
 #include "../../ftl_config.h"
 
 #include <stdlib.h>
+#include <string.h>
 #include "xtime_l.h"
 
 P_ZONE_MAP zoneMapPtr;
@@ -94,11 +95,6 @@ void InitZNS()
 	zoneWriteBufMapPtr->Head = 0;
 	zoneWriteBufMapPtr->Rear = MAXIMUM_OPEN_ZONE_COUNT - 1;
 	zoneWriteBufMapPtr->Num = MAXIMUM_OPEN_ZONE_COUNT;
-
-	// Initialize Read Buffer
-	for(i = 0; i < SLICE_PER_STRIPE; i++){
-		zoneMapPtr->readBufPtr[i] = 0;
-	}
 }
 
 void parameterCheck(){
@@ -471,18 +467,28 @@ int ZoneReadCheck(unsigned int zoneID, unsigned int slba, unsigned int nlb,
 	return zoneID;
 }
 
+static int WrapBufIdx(int idx, int ring)
+{
+    idx %= ring;
+    if(idx < 0)
+        idx += ring;
+    return idx;
+}
+
 unsigned int GetZoneDataBuf(unsigned int zoneID, int offset){
 	if(BUFFER_MODE == 0){
 		int bufferID = zoneMapPtr->zoneReg[zoneID].Buffer_ID;
 		int curBufWriteIdx = zoneWriteBufMapPtr->zoneWriteBufReg[bufferID].curBufWriteIdx;
-		unsigned int off_idx = (curBufWriteIdx + offset + DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE) % DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE;
+		int off_idx = WrapBufIdx(curBufWriteIdx + offset, DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE);
 		return ZNS_DATA_BUFFER_ENTRY_START + (bufferID * DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE) + off_idx;
 	}
 	else if(BUFFER_MODE == 1){
-		return ZNS_DATA_BUFFER_ENTRY_START + uniBufRegPtr->curBufWriteIdx;
+		int off_idx = WrapBufIdx(uniBufRegPtr->curBufWriteIdx + offset, OPEN_ZONE_DATA_BUFFER_ENTRY_COUNT);
+		return ZNS_DATA_BUFFER_ENTRY_START + off_idx;
 	}
 	else{
 		assert(!"[Error] Invalid Buffer Mode [Error]");
+		return 0;
 	}
 }
 
@@ -507,168 +513,103 @@ void incrementDataBufPointer(unsigned int zoneID){
 	}
 }
 
-unsigned int checkZoneWriteDataBuf(unsigned int reqSlotTag, unsigned int zoneID){
-	// Not in an open state
+static unsigned int LatestZoneWriteBuf(unsigned int zoneID)
+{
+	int curBufWriteIdx;
+	unsigned int latestEntry;
+
 	if(zoneMapPtr->zoneReg[zoneID].Buffer_ID == -1)
 		return DATA_BUF_FAIL;
 
-	unsigned int LatestdataBufEntry = GetZoneDataBuf(zoneID, 0);
-	unsigned int slice_diff = dataBufMapPtr->dataBuf[LatestdataBufEntry].logicalSliceAddr - reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr;
-
-	if(slice_diff < -EVICTION_OFFSET){
-		unsigned int dataBufEntry = GetZoneDataBuf(zoneID, -slice_diff);
-		if(dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr == reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr){
-			//xil_printf("\tHit: Slice_diff : %d\r\n", slice_diff);
-			return dataBufEntry;
-		}
-		else{
-			return DATA_BUF_FAIL;
-		}
-	}
-	else{
+	if(BUFFER_MODE == 0)
+		curBufWriteIdx = zoneWriteBufMapPtr->zoneWriteBufReg[zoneMapPtr->zoneReg[zoneID].Buffer_ID].curBufWriteIdx;
+	else if(BUFFER_MODE == 1)
+		curBufWriteIdx = uniBufRegPtr->curBufWriteIdx;
+	else
+	{
+		assert(!"[Error] Invalid Buffer Mode [Error]");
 		return DATA_BUF_FAIL;
 	}
+
+	if(curBufWriteIdx == -1)
+		return DATA_BUF_FAIL;
+
+	latestEntry = GetZoneDataBuf(zoneID, 0);
+	if(dataBufMapPtr->dataBuf[latestEntry].logicalSliceAddr == LSA_NONE)
+		return DATA_BUF_FAIL;
+
+	return latestEntry;
 }
 
-unsigned int checkZoneReadDataBuf(unsigned int reqSlotTag){
-	unsigned int bufEntry, logicalSliceAddr;
+unsigned int CheckPartialSliceWriteBuf(unsigned int reqSlotTag, unsigned int zoneID){
+	unsigned int latestEntry, reqLsa;
 
-	logicalSliceAddr = reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr;
-	bufEntry = znsReadBufHashTablePtr->dataBufHash[(logicalSliceAddr % ACTIVE_ZONE_READ_BUFFER_ENTRY_COUNT)].headEntry;
+	if(zoneMapPtr->zoneReg[zoneID].Buffer_ID == -1)
+		return DATA_BUF_FAIL;
 
-	while(bufEntry != DATA_BUF_NONE){
-		if(dataBufMapPtr->dataBuf[bufEntry].logicalSliceAddr == logicalSliceAddr){
-		
-			if((dataBufMapPtr->dataBuf[bufEntry].nextEntry != DATA_BUF_NONE) && (dataBufMapPtr->dataBuf[bufEntry].prevEntry != DATA_BUF_NONE))
-			{
-				dataBufMapPtr->dataBuf[dataBufMapPtr->dataBuf[bufEntry].prevEntry].nextEntry = dataBufMapPtr->dataBuf[bufEntry].nextEntry;
-				dataBufMapPtr->dataBuf[dataBufMapPtr->dataBuf[bufEntry].nextEntry].prevEntry = dataBufMapPtr->dataBuf[bufEntry].prevEntry;
-			}
-			else if((dataBufMapPtr->dataBuf[bufEntry].nextEntry == DATA_BUF_NONE) && (dataBufMapPtr->dataBuf[bufEntry].prevEntry != DATA_BUF_NONE))
-			{
-				dataBufMapPtr->dataBuf[dataBufMapPtr->dataBuf[bufEntry].prevEntry].nextEntry = DATA_BUF_NONE;
-				znsReadBufLruList.tailEntry = dataBufMapPtr->dataBuf[bufEntry].prevEntry;
-			}
-			else if((dataBufMapPtr->dataBuf[bufEntry].nextEntry != DATA_BUF_NONE) && (dataBufMapPtr->dataBuf[bufEntry].prevEntry== DATA_BUF_NONE))
-			{
-				dataBufMapPtr->dataBuf[dataBufMapPtr->dataBuf[bufEntry].nextEntry].prevEntry  = DATA_BUF_NONE;
-				znsReadBufLruList.headEntry = dataBufMapPtr->dataBuf[bufEntry].nextEntry;
-			}
-			else
-			{
-				znsReadBufLruList.tailEntry = DATA_BUF_NONE;
-				znsReadBufLruList.headEntry = DATA_BUF_NONE;
-			}
+	if(NON_SHARE_MOD == 1){
+		unsigned int slice_diff, dataBufEntry;
 
-			if(znsReadBufLruList.headEntry != DATA_BUF_NONE)
-			{
-				dataBufMapPtr->dataBuf[bufEntry].prevEntry = DATA_BUF_NONE;
-				dataBufMapPtr->dataBuf[bufEntry].nextEntry = znsReadBufLruList.headEntry;
-				dataBufMapPtr->dataBuf[znsReadBufLruList.headEntry].prevEntry = bufEntry;
-				znsReadBufLruList.headEntry = bufEntry;
-			}
-			else
-			{
-				dataBufMapPtr->dataBuf[bufEntry].prevEntry = DATA_BUF_NONE;
-				dataBufMapPtr->dataBuf[bufEntry].nextEntry = DATA_BUF_NONE;
-				znsReadBufLruList.headEntry = bufEntry;
-				znsReadBufLruList.tailEntry = bufEntry;
-			}	
-			
-			return bufEntry;
+		latestEntry = GetZoneDataBuf(zoneID, 0);
+		slice_diff = dataBufMapPtr->dataBuf[latestEntry].logicalSliceAddr - reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr;
+
+		if(slice_diff < -EVICTION_OFFSET){
+			dataBufEntry = GetZoneDataBuf(zoneID, -(int)slice_diff);
+			if(dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr == reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr)
+				return dataBufEntry;
 		}
-		else
-			bufEntry = dataBufMapPtr->dataBuf[bufEntry].hashNextEntry;
+		return DATA_BUF_FAIL;
+	}
+
+	latestEntry = LatestZoneWriteBuf(zoneID);
+	if(latestEntry == DATA_BUF_FAIL)
+		return DATA_BUF_FAIL;
+
+	reqLsa = reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr;
+	if(dataBufMapPtr->dataBuf[latestEntry].logicalSliceAddr == reqLsa)
+		return latestEntry;
+
+	return DATA_BUF_FAIL;
+}
+
+unsigned int CheckUnevictedSliceBuf(unsigned int reqSlotTag, unsigned int zoneID){
+	unsigned int latestEntry, latestLsa, reqLsa, dataBufEntry;
+	int d;
+
+	latestEntry = LatestZoneWriteBuf(zoneID);
+	if(latestEntry == DATA_BUF_FAIL)
+		return DATA_BUF_FAIL;
+
+	latestLsa = dataBufMapPtr->dataBuf[latestEntry].logicalSliceAddr;
+	reqLsa = reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr;
+	d = (int)latestLsa - (int)reqLsa;
+	if(d < 0 || d >= -EVICTION_OFFSET)
+		return DATA_BUF_FAIL;
+
+	dataBufEntry = GetZoneDataBuf(zoneID, -d);
+	if(dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr == reqLsa)
+		return dataBufEntry;
+
+	return DATA_BUF_FAIL;
+}
+
+static unsigned int znsReadBufIdx;
+
+static unsigned int AllocateZnsReadRingBuf(void)
+{
+	unsigned int base = AVAILABLE_DATA_BUFFER_ENTRY_COUNT + OPEN_ZONE_DATA_BUFFER_ENTRY_COUNT;
+	unsigned int i;
+
+	for(i = 0; i < ACTIVE_ZONE_READ_BUFFER_ENTRY_COUNT; i++)
+	{
+		unsigned int dataBufEntry = base + znsReadBufIdx;
+
+		znsReadBufIdx = (znsReadBufIdx + 1) % ACTIVE_ZONE_READ_BUFFER_ENTRY_COUNT;
+		if(dataBufMapPtr->dataBuf[dataBufEntry].blockingReqTail == REQ_SLOT_TAG_NONE)
+			return dataBufEntry;
 	}
 
 	return DATA_BUF_FAIL;
-
-}
-
-unsigned int AllocateZoneDataBuf()
-{
-	unsigned int evictedEntry = znsReadBufLruList.tailEntry;
-
-	if(evictedEntry == DATA_BUF_NONE)
-		assert(!"[WARNING] There is no valid buffer entry [WARNING]");
-
-	if(dataBufMapPtr->dataBuf[evictedEntry].prevEntry != DATA_BUF_NONE)
-	{
-		dataBufMapPtr->dataBuf[dataBufMapPtr->dataBuf[evictedEntry].prevEntry].nextEntry = DATA_BUF_NONE;
-		znsReadBufLruList.tailEntry = dataBufMapPtr->dataBuf[evictedEntry].prevEntry;
-
-		dataBufMapPtr->dataBuf[evictedEntry].prevEntry = DATA_BUF_NONE;
-		dataBufMapPtr->dataBuf[evictedEntry].nextEntry = znsReadBufLruList.headEntry;
-		dataBufMapPtr->dataBuf[znsReadBufLruList.headEntry].prevEntry = evictedEntry;
-		znsReadBufLruList.headEntry = evictedEntry;
-
-	}
-	else
-	{
-		dataBufMapPtr->dataBuf[evictedEntry].prevEntry = DATA_BUF_NONE;
-		dataBufMapPtr->dataBuf[evictedEntry].nextEntry = DATA_BUF_NONE;
-		znsReadBufLruList.headEntry = evictedEntry;
-		znsReadBufLruList.tailEntry = evictedEntry;
-	}
-
-	SelectiveGetFromZoneDataBufHashList(evictedEntry);
-
-	return evictedEntry;
-}
-
-void SelectiveGetFromZoneDataBufHashList(unsigned int bufEntry)
-{
-	if(dataBufMapPtr->dataBuf[bufEntry].logicalSliceAddr != LSA_NONE)
-	{
-		unsigned int prevBufEntry, nextBufEntry, hashEntry;
-
-		prevBufEntry =  dataBufMapPtr->dataBuf[bufEntry].hashPrevEntry;
-		nextBufEntry =  dataBufMapPtr->dataBuf[bufEntry].hashNextEntry;
-		hashEntry = dataBufMapPtr->dataBuf[bufEntry].logicalSliceAddr % ACTIVE_ZONE_READ_BUFFER_ENTRY_COUNT;
-
-		if((nextBufEntry != DATA_BUF_NONE) && (prevBufEntry != DATA_BUF_NONE))
-		{
-			dataBufMapPtr->dataBuf[prevBufEntry].hashNextEntry = nextBufEntry;
-			dataBufMapPtr->dataBuf[nextBufEntry].hashPrevEntry = prevBufEntry;
-		}
-		else if((nextBufEntry == DATA_BUF_NONE) && (prevBufEntry != DATA_BUF_NONE))
-		{
-			dataBufMapPtr->dataBuf[prevBufEntry].hashNextEntry = DATA_BUF_NONE;
-			znsReadBufHashTablePtr->dataBufHash[hashEntry].tailEntry = prevBufEntry;
-		}
-		else if((nextBufEntry != DATA_BUF_NONE) && (prevBufEntry == DATA_BUF_NONE))
-		{
-			dataBufMapPtr->dataBuf[nextBufEntry].hashPrevEntry = DATA_BUF_NONE;
-			znsReadBufHashTablePtr->dataBufHash[hashEntry].headEntry = nextBufEntry;
-		}
-		else
-		{
-			znsReadBufHashTablePtr->dataBufHash[hashEntry].headEntry = DATA_BUF_NONE;
-			znsReadBufHashTablePtr->dataBufHash[hashEntry].tailEntry = DATA_BUF_NONE;
-		}
-	}
-}
-
-void PutToZoneDataBufHashList(unsigned int bufEntry)
-{
-	unsigned int hashEntry;
-
-	hashEntry = dataBufMapPtr->dataBuf[bufEntry].logicalSliceAddr % ACTIVE_ZONE_READ_BUFFER_ENTRY_COUNT;
-
-	if(znsReadBufHashTablePtr->dataBufHash[hashEntry].tailEntry != DATA_BUF_NONE)
-	{
-		dataBufMapPtr->dataBuf[bufEntry].hashPrevEntry = znsReadBufHashTablePtr->dataBufHash[hashEntry].tailEntry ;
-		dataBufMapPtr->dataBuf[bufEntry].hashNextEntry = REQ_SLOT_TAG_NONE;
-		dataBufMapPtr->dataBuf[znsReadBufHashTablePtr->dataBufHash[hashEntry].tailEntry].hashNextEntry = bufEntry;
-		znsReadBufHashTablePtr->dataBufHash[hashEntry].tailEntry = bufEntry;
-	}
-	else
-	{
-		dataBufMapPtr->dataBuf[bufEntry].hashPrevEntry = REQ_SLOT_TAG_NONE;
-		dataBufMapPtr->dataBuf[bufEntry].hashNextEntry = REQ_SLOT_TAG_NONE;
-		znsReadBufHashTablePtr->dataBufHash[hashEntry].headEntry = bufEntry;
-		znsReadBufHashTablePtr->dataBufHash[hashEntry].tailEntry = bufEntry;
-	}
 }
 
 static int ZnsWriteSliceIncomplete(unsigned int zoneID, unsigned int logicalSliceAddr)
@@ -718,7 +659,7 @@ void ZNS_ReqTransSliceToLowLevel(unsigned int reqSlotTag){
 			return;
 		}
 
-		dataBufEntry = checkZoneWriteDataBuf(reqSlotTag, zoneID);
+		dataBufEntry = CheckPartialSliceWriteBuf(reqSlotTag, zoneID);
 		bufHit = (dataBufEntry != DATA_BUF_FAIL);
 
 		if(!bufHit){
@@ -731,9 +672,6 @@ void ZNS_ReqTransSliceToLowLevel(unsigned int reqSlotTag){
 			reqPoolPtr->reqPool[reqSlotTag].dataBufInfo.entry = dataBufEntry;
 			ZNS_EvictDataBufEntry(zoneID, reqSlotTag);
 			dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr = reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr;
-
-			if(numOfNvmeBlock != NVME_BLOCKS_PER_SLICE)
-				ZNS_DataReadFromNand(zoneID, reqSlotTag);
 		}
 		else{
 			reqPoolPtr->reqPool[reqSlotTag].dataBufInfo.entry = dataBufEntry;
@@ -751,15 +689,34 @@ void ZNS_ReqTransSliceToLowLevel(unsigned int reqSlotTag){
 	}
 	else if(reqPoolPtr->reqPool[reqSlotTag].reqCode  == REQ_CODE_ZONE_READ)
 	{
-		dataBufEntry = ZNS_AllocateReadDataBuf(zoneID, reqSlotTag);
-		reqPoolPtr->reqPool[reqSlotTag].dataBufInfo.entry = dataBufEntry;
+		dataBufEntry = CheckUnevictedSliceBuf(reqSlotTag, zoneID);
+		if(dataBufEntry != DATA_BUF_FAIL)
+		{
+			reqPoolPtr->reqPool[reqSlotTag].dataBufInfo.entry = dataBufEntry;
+			reqPoolPtr->reqPool[reqSlotTag].reqCode = REQ_CODE_TxDMA;
+		}
+		else
+		{
+			unsigned int virtualSliceAddr;
 
-		dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr = reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr;
-		PutToZoneDataBufHashList(dataBufEntry);
+			dataBufEntry = AllocateZnsReadRingBuf();
+			if(dataBufEntry == DATA_BUF_FAIL)
+			{
+				ZnsAbortSliceReq(reqSlotTag, SCT_GENERIC_COMMAND_STATUS, SC_INTERNAL_DEVICE_ERROR, 1);
+				return;
+			}
 
-		ZNS_DataReadFromNand(zoneID, reqSlotTag);	
-		
-		reqPoolPtr->reqPool[reqSlotTag].reqCode = REQ_CODE_TxDMA;
+			reqPoolPtr->reqPool[reqSlotTag].dataBufInfo.entry = dataBufEntry;
+			dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr = reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr;
+
+			virtualSliceAddr = ZNS_AddrTransRead(reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr);
+			if(virtualSliceAddr != VSA_FAIL)
+				ZNS_DataReadFromNand(zoneID, reqSlotTag);
+			else
+				memset((void *)(DATA_BUFFER_BASE_ADDR + dataBufEntry * BYTES_PER_DATA_REGION_OF_SLICE), 0, BYTES_PER_DATA_REGION_OF_SLICE);
+
+			reqPoolPtr->reqPool[reqSlotTag].reqCode = REQ_CODE_TxDMA;
+		}
 	}
 	else
 		assert(!"[WARNING] Not supported reqCode. [WARNING]");
@@ -793,21 +750,6 @@ unsigned int ZNS_AllocateWriteDataBuf(unsigned int zoneID, unsigned int reqSlotT
 	return dataBufEntry;
 }
 
-unsigned int ZNS_AllocateReadDataBuf(unsigned int zoneID, unsigned int reqSlotTag){
-
-	unsigned int dataBufEntry;
-
-	dataBufEntry = checkZoneWriteDataBuf(reqSlotTag, zoneID);
-	if(dataBufEntry == DATA_BUF_FAIL){
-		dataBufEntry = checkZoneReadDataBuf(reqSlotTag);
-		if(dataBufEntry == DATA_BUF_FAIL){
-			dataBufEntry = AllocateZoneDataBuf();
-		}
-	}
-
-	return dataBufEntry;
-}
-
 void ZNS_EvictDataBufEntry(unsigned int zoneID, unsigned int originReqSlotTag){
 	unsigned int reqSlotTag, virtualSliceAddr, dataBufEntry;
 
@@ -831,7 +773,7 @@ void ZNS_EvictDataBufEntry(unsigned int zoneID, unsigned int originReqSlotTag){
 				wrrPtr->buffer_count[evict_zoneID] -= 1;
 				wrrPtr->total_buffer_count -= 1;	
 
-				
+				/*
 				xil_printf("[DEBUG] evict_zone=%d weight=%d bufferID=%d dirtyIdx=%d bufCount=%d totalBuf=%d totalWeight=%d listLen=%d\r\n",
 					evict_zoneID,
 					wrr_get_zone_weight(evict_zoneID),
@@ -841,6 +783,7 @@ void ZNS_EvictDataBufEntry(unsigned int zoneID, unsigned int originReqSlotTag){
 					wrrPtr->total_buffer_count,
 					wrrPtr->total_weight,
 					wrrPtr->listLength);
+				*/
 					
 
 				if(wrrPtr->buffer_count[evict_zoneID] == 0){
@@ -979,51 +922,65 @@ void ZNS_DataReadFromNand(unsigned int zoneID, unsigned int originReqSlotTag)
 	}
 }
 
-unsigned int ZNS_AddrTransWrite(unsigned int logicalSliceAddr){
-	unsigned int BLOCK_GROUP_ID, virtualSliceAddr, dieNo, innerBlockNo, outerBlockNo, blockNo, pageNo, zoneID;
+static unsigned int ZnsLogicalSliceToVsa(unsigned int logicalSliceAddr)
+{
+	unsigned int blockGroupId, dieNo, innerBlockNo, outerBlockNo, blockNo, pageNo, zoneID;
+	int sliceID;
 
 	zoneID = Lsa2ZoneId(logicalSliceAddr);
+	blockGroupId = zoneMapPtr->zoneReg[zoneID].Phy_Block_Group_ID;
+	sliceID = logicalSliceAddr - (zoneID * SLICE_PER_ZONE);
 
-	BLOCK_GROUP_ID = zoneMapPtr->zoneReg[zoneID].Phy_Block_Group_ID;
-
-	int sliceID = logicalSliceAddr - (zoneID * SLICE_PER_ZONE);	
-
-	dieNo = ((BLOCK_GROUP_ID % BLOCK_GROUP_IN_COLUMN) * NUM_OF_DIE_PER_ZONE) + (sliceID % NUM_OF_DIE_PER_ZONE);
-	if(CHANNEL_WAY_ORIENTED == 1){
+	dieNo = ((blockGroupId % BLOCK_GROUP_IN_COLUMN) * NUM_OF_DIE_PER_ZONE) + (sliceID % NUM_OF_DIE_PER_ZONE);
+	if(CHANNEL_WAY_ORIENTED == 1)
 		dieNo = ((dieNo % 8) * 8) + (dieNo / 8);
-	}
 
 	pageNo = (sliceID / NUM_OF_DIE_PER_ZONE) % (SLICES_PER_BLOCK);
-
 	innerBlockNo = (sliceID / (NUM_OF_DIE_PER_ZONE * SLICES_PER_BLOCK)) % NUM_OF_BLOCK_PER_ZONE;
-	outerBlockNo = BLOCK_GROUP_ID / BLOCK_GROUP_IN_COLUMN;
-
+	outerBlockNo = blockGroupId / BLOCK_GROUP_IN_COLUMN;
 	blockNo = outerBlockNo * NUM_OF_BLOCK_PER_ZONE + innerBlockNo;
 
-	virtualSliceAddr = Vorg2VsaTranslation(dieNo, blockNo, pageNo);
+	return Vorg2VsaTranslation(dieNo, blockNo, pageNo);
+}
+
+unsigned int ZNS_AddrTransWrite(unsigned int logicalSliceAddr){
+	unsigned int virtualSliceAddr, dieNo, blockNo;
+
+	virtualSliceAddr = ZnsLogicalSliceToVsa(logicalSliceAddr);
+	dieNo = Vsa2VdieTranslation(virtualSliceAddr);
+	blockNo = Vsa2VblockTranslation(virtualSliceAddr);
 	virtualBlockMapPtr->block[dieNo][blockNo].currentPage++;
 
 	logicalSliceMapPtr->logicalSlice[logicalSliceAddr].virtualSliceAddr = virtualSliceAddr;
 	virtualSliceMapPtr->virtualSlice[virtualSliceAddr].logicalSliceAddr = logicalSliceAddr;
 
-	//xil_printf("[DEBUG] LSA:0x%08x | Z:%d | BG:%d | sID:%d | die:%d | pg:%d | blk:%d | VSA:0x%08x\r\n", logicalSliceAddr, zoneID, BLOCK_GROUP_ID, sliceID, dieNo, pageNo, blockNo, virtualSliceAddr);
-
 	return virtualSliceAddr;
 }
 
 unsigned int ZNS_AddrTransRead(unsigned int logicalSliceAddr){
-	
-	unsigned int virtualSliceAddr;
+	unsigned int zoneID, wp, slba, wpLsa;
 
-	if(logicalSliceAddr < SLICES_PER_SSD)
+	if(logicalSliceAddr >= SLICES_PER_SSD)
 	{
-		virtualSliceAddr = logicalSliceMapPtr->logicalSlice[logicalSliceAddr].virtualSliceAddr;
+		assert(!"[WARNING] Logical address is larger than maximum logical address served by SSD [WARNING]");
+		return VSA_FAIL;
+	}
 
-		if(virtualSliceAddr != VSA_NONE)
-			return virtualSliceAddr;
-		else
+	zoneID = Lsa2ZoneId(logicalSliceAddr);
+	if(zoneID >= MAXIMUM_ACTIVE_ZONE_COUNT)
+		return VSA_FAIL;
+
+	if(zoneMapPtr->zoneReg[zoneID].Phy_Block_Group_ID < 0)
+		return VSA_FAIL;
+
+	wp = zoneMapPtr->zoneReg[zoneID].Write_Pointer;
+	slba = zoneMapPtr->zoneReg[zoneID].SLBA;
+	if(wp < slba + NVME_BLOCKS_PER_ZONE)
+	{
+		wpLsa = (zoneID * SLICE_PER_ZONE) + ((wp / NVME_BLOCKS_PER_SLICE) % SLICE_PER_ZONE);
+		if(logicalSliceAddr >= wpLsa)
 			return VSA_FAIL;
 	}
-	else
-		assert(!"[WARNING] Logical address is larger than maximum logical address served by SSD [WARNING]");
+
+	return ZnsLogicalSliceToVsa(logicalSliceAddr);
 }

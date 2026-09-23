@@ -91,20 +91,6 @@ typedef struct _DATA_BUF_HASH_TABLE{
 	DATA_BUF_HASH_ENTRY dataBufHash[AVAILABLE_DATA_BUFFER_ENTRY_COUNT];
 } DATA_BUF_HASH_TABLE, *P_DATA_BUF_HASH_TABLE;
 
-typedef struct _ZNS_READ_BUF_LRU_LIST {
-	unsigned int headEntry : 16;
-	unsigned int tailEntry : 16;
-} ZNS_READ_BUF_LRU_LIST, *P_ZNS_READ_BUF_LRU_LIST;
-
-typedef struct _ZNS_DATA_BUF_HASH_ENTRY{
-	unsigned int headEntry : 16;
-	unsigned int tailEntry : 16;
-} ZNS_READ_BUF_HASH_ENTRY, *P_ZNS_READ_BUF_HASH_ENTRY;
-
-typedef struct _ZNS_DATA_BUF_HASH_TABLE{
-	ZNS_READ_BUF_HASH_ENTRY dataBufHash[ACTIVE_ZONE_READ_BUFFER_ENTRY_COUNT];
-} ZNS_READ_BUF_HASH_TABLE, *P_ZNS_READ_BUF_HASH_TABLE;
-
 typedef struct _TEMPORARY_DATA_BUF_ENTRY {
 	unsigned int blockingReqTail : 16;
 	unsigned int reserved0 : 16;
@@ -129,8 +115,5 @@ extern P_DATA_BUF_MAP dataBufMapPtr;
 extern DATA_BUF_LRU_LIST dataBufLruList;
 extern P_DATA_BUF_HASH_TABLE dataBufHashTable;
 extern P_TEMPORARY_DATA_BUF_MAP tempDataBufMapPtr;
-
-extern ZNS_READ_BUF_LRU_LIST znsReadBufLruList;
-extern P_ZNS_READ_BUF_HASH_TABLE znsReadBufHashTablePtr;
 
 #endif /* DATA_BUFFER_H_ */

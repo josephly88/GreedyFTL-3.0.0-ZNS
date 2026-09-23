@@ -37,9 +37,7 @@
 #define EVICTION_THRESHOLD									(16)
 
 // Each Entry is a slice (16KB)
-#define ACTIVE_ZONE_READ_BUFFER_ENTRY_COUNT					(64)		
-// Flash buffer pre-fetch (Amount)
-#define FLASH_BATCH_READ									0
+#define ACTIVE_ZONE_READ_BUFFER_ENTRY_COUNT					(64)
 
 /*-------------------------------------------------------------
 		Section : Output Parameters
@@ -103,7 +101,6 @@ typedef struct _ZONE_MAP
 {
     unsigned int Num_Open_Zone;
     ZONE_REG zoneReg[MAXIMUM_ACTIVE_ZONE_COUNT];
-	unsigned int readBufPtr[64];
 } ZONE_MAP, *P_ZONE_MAP;
 
 typedef struct _VALID_BLOCK_GROUP_FIFO

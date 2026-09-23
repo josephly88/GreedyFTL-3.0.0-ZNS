@@ -54,10 +54,6 @@ DATA_BUF_LRU_LIST dataBufLruList;
 P_DATA_BUF_HASH_TABLE dataBufHashTablePtr;
 P_TEMPORARY_DATA_BUF_MAP tempDataBufMapPtr;
 
-//ZNS
-ZNS_READ_BUF_LRU_LIST znsReadBufLruList;
-P_ZNS_READ_BUF_HASH_TABLE znsReadBufHashTablePtr;
-
 void InitDataBuf()
 {
 	int bufEntry, base;
@@ -100,25 +96,16 @@ void InitDataBuf()
 		dataBufMapPtr->dataBuf[bufEntry].hashNextEntry = DATA_BUF_NONE;
 	}
 
-	// ZNS Active Read Buffer
-	znsReadBufHashTablePtr = (P_ZNS_READ_BUF_HASH_TABLE)ZNS_READ_BUF_HASH_TABLE_ADDR;
 	base = AVAILABLE_DATA_BUFFER_ENTRY_COUNT + OPEN_ZONE_DATA_BUFFER_ENTRY_COUNT;
 	for(bufEntry = base; bufEntry < base + ACTIVE_ZONE_READ_BUFFER_ENTRY_COUNT; bufEntry++){
 		dataBufMapPtr->dataBuf[bufEntry].logicalSliceAddr = LSA_NONE;
-		dataBufMapPtr->dataBuf[bufEntry].prevEntry = bufEntry-1;
-		dataBufMapPtr->dataBuf[bufEntry].nextEntry = bufEntry+1;
+		dataBufMapPtr->dataBuf[bufEntry].prevEntry = 0;
+		dataBufMapPtr->dataBuf[bufEntry].nextEntry = 0;
 		dataBufMapPtr->dataBuf[bufEntry].dirty = DATA_BUF_CLEAN;
 		dataBufMapPtr->dataBuf[bufEntry].blockingReqTail =  REQ_SLOT_TAG_NONE;
-
-		znsReadBufHashTablePtr->dataBufHash[bufEntry - base].headEntry = DATA_BUF_NONE;
-		znsReadBufHashTablePtr->dataBufHash[bufEntry - base].tailEntry = DATA_BUF_NONE;
 		dataBufMapPtr->dataBuf[bufEntry].hashPrevEntry = DATA_BUF_NONE;
 		dataBufMapPtr->dataBuf[bufEntry].hashNextEntry = DATA_BUF_NONE;
 	}
-	dataBufMapPtr->dataBuf[base].prevEntry = DATA_BUF_NONE;
-	dataBufMapPtr->dataBuf[TOTAL_BUFFER_COUNT - 1].nextEntry = DATA_BUF_NONE;
-	znsReadBufLruList.headEntry = base;
-	znsReadBufLruList.tailEntry = base + ACTIVE_ZONE_READ_BUFFER_ENTRY_COUNT - 1;
 }	
 
 unsigned int CheckDataBufHit(unsigned int reqSlotTag)
