@@ -7,7 +7,7 @@
 /*-------------------------------------------------------------
 		Section : Input Parameters
 -------------------------------------------------------------*/
-#define ZNS_IO_COMMAND_SET									1			// 0-Normal, 1-ZNS
+#define ZNS_IO_COMMAND_SET									0			// 0-Normal, 1-ZNS
 
 // Row Group: 1-8192 (Must be a factor of 8192 (USER_BLOCKS_PER_DIE). E.g., 8192 / 1024 = 8 that has no remainder)
 #define NUM_OF_BLOCK_PER_ZONE								8			// 1 Block : 2MB

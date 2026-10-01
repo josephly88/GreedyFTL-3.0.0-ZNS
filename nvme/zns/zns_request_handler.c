@@ -350,7 +350,7 @@ int weighted_buffer_size(int zoneID) {
 
 	//Fair_Mix_1
 	
-    
+	return 0;
 }
 
 int ZoneWriteCheck(unsigned int zoneID, unsigned int slba, unsigned int nlb,

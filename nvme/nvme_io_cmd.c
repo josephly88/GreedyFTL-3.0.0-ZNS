@@ -72,8 +72,6 @@ void handle_nvme_io_read(unsigned int cmdSlotTag, NVME_IO_COMMAND *nvmeIOCmd)
 	//IO_READ_COMMAND_DW15 readInfo15;
 	unsigned int startLba[2];
 	unsigned int nlb;
-	unsigned int nsid = nvmeIOCmd->NSID;
-
 	readInfo12.dword = nvmeIOCmd->dword[12];
 	//readInfo13.dword = nvmeIOCmd->dword[13];
 	//readInfo15.dword = nvmeIOCmd->dword[15];
@@ -82,12 +80,12 @@ void handle_nvme_io_read(unsigned int cmdSlotTag, NVME_IO_COMMAND *nvmeIOCmd)
 	startLba[1] = nvmeIOCmd->dword[11];
 	nlb = readInfo12.NLB;
 
-	ASSERT(startLba[0] < storageCapacity_L / USER_CHANNELS && (startLba[1] < STORAGE_CAPACITY_H || startLba[1] == 0));
+	ASSERT(startLba[0] < storageCapacity_L && (startLba[1] < STORAGE_CAPACITY_H || startLba[1] == 0));
 	//ASSERT(nlb < MAX_NUM_OF_NLB);
 	ASSERT((nvmeIOCmd->PRP1[0] & 0x3) == 0 && (nvmeIOCmd->PRP2[0] & 0x3) == 0); //error
 	ASSERT(nvmeIOCmd->PRP1[1] < 0x10000 && nvmeIOCmd->PRP2[1] < 0x10000);
 
-	ReqTransNvmeToSlice(cmdSlotTag, startLba[0] + (storageCapacity_L / USER_CHANNELS) * (nsid - 1), nlb, IO_NVM_READ);
+	ReqTransNvmeToSlice(cmdSlotTag, startLba[0], nlb, IO_NVM_READ);
 }
 
 
@@ -98,8 +96,6 @@ void handle_nvme_io_write(unsigned int cmdSlotTag, NVME_IO_COMMAND *nvmeIOCmd)
 	//IO_READ_COMMAND_DW15 writeInfo15;
 	unsigned int startLba[2];
 	unsigned int nlb;
-	unsigned int nsid = nvmeIOCmd->NSID;
-
 	writeInfo12.dword = nvmeIOCmd->dword[12];
 	//writeInfo13.dword = nvmeIOCmd->dword[13];
 	//writeInfo15.dword = nvmeIOCmd->dword[15];
@@ -111,12 +107,12 @@ void handle_nvme_io_write(unsigned int cmdSlotTag, NVME_IO_COMMAND *nvmeIOCmd)
 	startLba[1] = nvmeIOCmd->dword[11];
 	nlb = writeInfo12.NLB;
 
-	ASSERT(startLba[0] < storageCapacity_L / USER_CHANNELS && (startLba[1] < STORAGE_CAPACITY_H || startLba[1] == 0));
+	ASSERT(startLba[0] < storageCapacity_L && (startLba[1] < STORAGE_CAPACITY_H || startLba[1] == 0));
 	//ASSERT(nlb < MAX_NUM_OF_NLB);
 	ASSERT((nvmeIOCmd->PRP1[0] & 0xF) == 0 && (nvmeIOCmd->PRP2[0] & 0xF) == 0);
 	ASSERT(nvmeIOCmd->PRP1[1] < 0x10000 && nvmeIOCmd->PRP2[1] < 0x10000);
 
-	ReqTransNvmeToSlice(cmdSlotTag, startLba[0] + (storageCapacity_L / USER_CHANNELS) * (nsid - 1), nlb, IO_NVM_WRITE);
+	ReqTransNvmeToSlice(cmdSlotTag, startLba[0], nlb, IO_NVM_WRITE);
 }
 
 void handle_nvme_io_zns_mgmt_send(unsigned int cmdSlotTag, NVME_IO_COMMAND *nvmeIOCmd){

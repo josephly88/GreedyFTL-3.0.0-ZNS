@@ -111,7 +111,7 @@ void identify_controller(unsigned int pBuffer)
 	identifyCNTL->CQES.requiredCompletionQueueEntrySize = 0x4;
 	identifyCNTL->CQES.maximumCompletionQueueEntrySize = 0x4;
 
-	identifyCNTL->NN = USER_CHANNELS;
+	identifyCNTL->NN = NUM_REPORTED_NVME_NAMESPACES;
 
 	identifyCNTL->ONCS.supportsCompare = 0x0;
 	identifyCNTL->ONCS.supportsWriteUncorrectable = 0x0;
@@ -154,11 +154,11 @@ void identify_namespace(unsigned int pBuffer)
 
 	memset(identifyNS, 0, sizeof(ADMIN_IDENTIFY_NAMESPACE));
 
-	identifyNS->NSZE[0] = storageCapacity_L / USER_CHANNELS;
+	identifyNS->NSZE[0] = storageCapacity_L;
 	identifyNS->NSZE[1] = STORAGE_CAPACITY_H;
-	identifyNS->NCAP[0] = storageCapacity_L / USER_CHANNELS;
+	identifyNS->NCAP[0] = storageCapacity_L;
 	identifyNS->NCAP[1] = STORAGE_CAPACITY_H;
-	identifyNS->NUSE[0] = storageCapacity_L / USER_CHANNELS;
+	identifyNS->NUSE[0] = storageCapacity_L;
 	identifyNS->NUSE[1] = STORAGE_CAPACITY_H;
 
 	identifyNS->NSFEAT.supportsThinProvisioning = 0x0;
@@ -206,7 +206,7 @@ void identify_active_namespace(unsigned int pBuffer)
     identifyNS = (ADMIN_IDENTIFY_ACTIVE_NAMESPACE *)pBuffer;
     memset(identifyNS, 0, sizeof(ADMIN_IDENTIFY_ACTIVE_NAMESPACE));
 
-    for(i = 0; i < USER_CHANNELS; i++)
+    for(i = 0; i < NUM_REPORTED_NVME_NAMESPACES; i++)
     {
         identifyNS->active_namespace[i] = i + 1;
     }
@@ -246,13 +246,9 @@ void identify_zns_command_set(unsigned int pBuffer)
 
 	memset(identifyZnsCmdSet, 0, sizeof(ADMIN_IDENTIFY_ZNS_COMMAND_SET));
 
-	// Maximum Active Resource
-	identifyZnsCmdSet->MAR = 1;
-	// Maximun Open Resource
-	identifyZnsCmdSet->MOR = 1;
-
-	// Zone Size
-	identifyZnsCmdSet->LBAFE[0].ZSZE = 1;
+	identifyZnsCmdSet->MAR = MAXIMUM_ACTIVE_ZONE_COUNT;
+	identifyZnsCmdSet->MOR = MAXIMUM_OPEN_ZONE_COUNT;
+	identifyZnsCmdSet->LBAFE[0].ZSZE = NVME_BLOCKS_PER_ZONE;
 }
 
 void identify_controller_ioset(unsigned int pBuffer)
