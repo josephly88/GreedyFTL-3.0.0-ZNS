@@ -55,7 +55,7 @@
 #define __HOST_LLD_H_
 
 
-#define HOST_IP_ADDR						(XPAR_NVMEHOSTCONTROLLER_0_BASEADDR)
+#define HOST_IP_ADDR						(XPAR___NVMEHOSTCONTROLLER_0_BASEADDR)
 
 #define DEV_IRQ_MASK_REG_ADDR				(HOST_IP_ADDR + 0x4)
 #define DEV_IRQ_CLEAR_REG_ADDR				(HOST_IP_ADDR + 0x8)
@@ -74,7 +74,7 @@
 #define NVME_CPL_FIFO_REG_ADDR				(HOST_IP_ADDR + 0x304)
 #define HOST_DMA_CMD_FIFO_REG_ADDR			(HOST_IP_ADDR + 0x310)
 
-#define NVME_CMD_SRAM_ADDR					(HOST_IP_ADDR + 0x2000)
+#define NVME_CMD_SRAM_ADDR					(HOST_IP_ADDR + 0x10000)
 
 
 
@@ -88,6 +88,7 @@
 #define ONLY_CPL_TYPE						(0)
 #define AUTO_CPL_TYPE						(1)
 #define CMD_SLOT_RELEASE_TYPE				(2)
+#define P_SLOT_TAG_WIDTH					(10) //slot_modified
 
 #pragma pack(push, 1)
 
@@ -152,7 +153,10 @@ typedef struct _NVME_STATUS_REG
 			unsigned int reserved0			:1;
 			unsigned int cstsRdy			:1;
 			unsigned int cstsShst			:2;
-			unsigned int reserved1			:25;
+			unsigned int rstCnt				:4;
+			unsigned int linkNum			:2;
+			unsigned int linkEn				:2;
+			unsigned int reserved1			:17;
 		};
 	};
 } NVME_STATUS_REG;
@@ -164,11 +168,11 @@ typedef struct _NVME_CMD_FIFO_REG
 		unsigned int dword;
 		struct {
 			unsigned int qID				:4;
-			unsigned int reserved0			:4;
-			unsigned int cmdSlotTag			:7;
-			unsigned int reserved2			:1;
+			unsigned int reserved0			:1;//slot_modified
+			unsigned int cmdSlotTag			:P_SLOT_TAG_WIDTH; //slot_modified
+			unsigned int reserved2			:1;//slot_modified
 			unsigned int cmdSeqNum			:8;
-			unsigned int reserved3			:7;
+			unsigned int reserved3			:(17-P_SLOT_TAG_WIDTH);//slot_modified
 			unsigned int cmdValid			:1;
 		};
 	};
@@ -189,8 +193,8 @@ typedef struct _NVME_CPL_FIFO_REG
 
 			unsigned int specific;
 
-			unsigned short cmdSlotTag			:7;
-			unsigned short reserved1			:7;
+			unsigned short cmdSlotTag			:P_SLOT_TAG_WIDTH; //slot_modified
+			unsigned short reserved1			:(14- P_SLOT_TAG_WIDTH); //slot_modified
 			unsigned short cplType				:2;
 
 			union {
@@ -230,11 +234,10 @@ typedef struct _NVME_IO_SQ_SET_REG
 		unsigned int dword[2];
 		struct {
 			unsigned int pcieBaseAddrL;
-			unsigned int pcieBaseAddrH		:4;
-			unsigned int reserved0			:11;
+			unsigned int pcieBaseAddrH		:16;//modified
 			unsigned int valid				:1;
 			unsigned int cqVector			:4;
-			unsigned int reserved1			:4;
+			unsigned int reserved1			:3;
 			unsigned int sqSize				:8;
 		};
 	};
@@ -248,12 +251,11 @@ typedef struct _NVME_IO_CQ_SET_REG
 		unsigned int dword[2];
 		struct {
 			unsigned int pcieBaseAddrL;
-			unsigned int pcieBaseAddrH		:4;
-			unsigned int reserved0			:11;
+			unsigned int pcieBaseAddrH		:16;//modified
 			unsigned int valid				:1;
 			unsigned int irqVector			:3;
 			unsigned int irqEn				:1;
-			unsigned int reserved1			:4;
+			unsigned int reserved1			:3;
 			unsigned int cqSize				:8;
 		};
 	};
@@ -278,7 +280,7 @@ typedef struct _HOST_DMA_FIFO_CNT_REG
 typedef struct _HOST_DMA_CMD_FIFO_REG
 {
 	union {
-		unsigned int dword[4];
+		unsigned int dword[5];//slot_modified
 		struct 
 		{
 			unsigned int devAddr;
@@ -289,10 +291,11 @@ typedef struct _HOST_DMA_CMD_FIFO_REG
 				unsigned int dmaLen				:13;
 				unsigned int autoCompletion		:1;
 				unsigned int cmd4KBOffset		:9;
-				unsigned int cmdSlotTag			:7;
+				unsigned int reserved0			:7;//slot_modified
 				unsigned int dmaDirection		:1;
 				unsigned int dmaType			:1;
 			};
+			unsigned int cmdSlotTag;//slot_modified
 		};
 	};
 } HOST_DMA_CMD_FIFO_REG;
@@ -354,6 +357,10 @@ void set_direct_rx_dma(unsigned int devAddr, unsigned int pcieAddrH, unsigned in
 void set_auto_tx_dma(unsigned int cmdSlotTag, unsigned int cmd4KBOffset, unsigned int devAddr, unsigned int autoCompletion);
 
 void set_auto_rx_dma(unsigned int cmdSlotTag, unsigned int cmd4KBOffset, unsigned int devAddr, unsigned int autoCompletion);
+
+void set_link_width(unsigned int linkNum);
+
+void pcie_async_reset(unsigned int rstCnt);
 
 void check_direct_tx_dma_done();
 

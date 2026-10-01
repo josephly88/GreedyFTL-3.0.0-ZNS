@@ -110,7 +110,7 @@ void identify_controller(unsigned int pBuffer)
 	identifyCNTL->CQES.requiredCompletionQueueEntrySize = 0x4;
 	identifyCNTL->CQES.maximumCompletionQueueEntrySize = 0x4;
 
-	identifyCNTL->NN = 0x1;
+	identifyCNTL->NN = USER_CHANNELS;
 
 	identifyCNTL->ONCS.supportsCompare = 0x0;
 	identifyCNTL->ONCS.supportsWriteUncorrectable = 0x0;
@@ -153,11 +153,11 @@ void identify_namespace(unsigned int pBuffer)
 
 	memset(identifyNS, 0, sizeof(ADMIN_IDENTIFY_NAMESPACE));
 
-	identifyNS->NSZE[0] = storageCapacity_L;
+	identifyNS->NSZE[0] = storageCapacity_L / USER_CHANNELS;
 	identifyNS->NSZE[1] = STORAGE_CAPACITY_H;
-	identifyNS->NCAP[0] = storageCapacity_L;
+	identifyNS->NCAP[0] = storageCapacity_L / USER_CHANNELS;
 	identifyNS->NCAP[1] = STORAGE_CAPACITY_H;
-	identifyNS->NUSE[0] = storageCapacity_L;
+	identifyNS->NUSE[0] = storageCapacity_L / USER_CHANNELS;
 	identifyNS->NUSE[1] = STORAGE_CAPACITY_H;
 
 	identifyNS->NSFEAT.supportsThinProvisioning = 0x0;
@@ -197,14 +197,18 @@ void identify_namespace(unsigned int pBuffer)
 	formatData->RP = 0x2;
 }
 
-void identify_namespace_list(unsigned int pBuffer)
+void identify_active_namespace(unsigned int pBuffer)
 {
-	ADMIN_IDENTIFY_4096B *identify4096B;
-	identify4096B = (ADMIN_IDENTIFY_4096B*)pBuffer;
+    ADMIN_IDENTIFY_ACTIVE_NAMESPACE *identifyNS;
+    int i = 0;
 
-	memset(identify4096B, 0, sizeof(ADMIN_IDENTIFY_4096B));
+    identifyNS = (ADMIN_IDENTIFY_ACTIVE_NAMESPACE *)pBuffer;
+    memset(identifyNS, 0, sizeof(ADMIN_IDENTIFY_ACTIVE_NAMESPACE));
 
-	identify4096B->id0 = 0x1;
+    for(i = 0; i < USER_CHANNELS; i++)
+    {
+        identifyNS->active_namespace[i] = i + 1;
+    }
 }
 
 void identify_command_set(unsigned int pBuffer)

@@ -59,7 +59,7 @@ void identify_controller(unsigned int pBuffer);
 
 void identify_namespace(unsigned int pBuffer);
 
-void identify_namespace_list(unsigned int pBuffer);
+void identify_active_namespace(unsigned int pBuffer);
 
 void identify_command_set(unsigned int pBuffer);
 

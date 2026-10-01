@@ -76,6 +76,8 @@ volatile NVME_CONTEXT g_nvmeTask;
 void nvme_main()
 {
 	unsigned int exeLlr;
+	unsigned int rstCnt = 0;
+
 
 	xil_printf("!!! Wait until FTL reset complete !!! \r\n");
 
@@ -109,6 +111,7 @@ void nvme_main()
 
 			if(cmdValid == 1)
 			{
+				rstCnt = 0;
 				if(nvmeCmd.qID == 0)
 				{
 					handle_nvme_admin_cmd(&nvmeCmd);
@@ -168,6 +171,16 @@ void nvme_main()
 				set_io_cq(qID, 0, 0, 0, 0, 0, 0);
 				set_io_sq(qID, 0, 0, 0, 0, 0);
 			}
+			
+			if (rstCnt>= 5){
+				pcie_async_reset(rstCnt);
+				rstCnt = 0;
+				xil_printf("\r\nPcie iink disable!!!\r\n");
+				xil_printf("Wait few minute or reconnect the PCIe cable\r\n");
+			}
+			else
+				rstCnt++;
+
 			g_nvmeTask.cacheEn = 0;
 			set_nvme_admin_queue(0, 0, 0);
 			set_nvme_csts_shst(0);
