@@ -56,6 +56,7 @@
 #include "nvme.h"
 #include "nvme_identify.h"
 #include "../ftl_config.h"
+#include "zns/zns.h"
 
 void identify_controller(unsigned int pBuffer)
 {
@@ -209,6 +210,23 @@ void identify_active_namespace(unsigned int pBuffer)
     {
         identifyNS->active_namespace[i] = i + 1;
     }
+}
+
+void identify_io_command_set_namespace(unsigned int pBuffer)
+{
+	unsigned char *p = (unsigned char *)pBuffer;
+
+	memset(p, 0, 4096);
+
+	/* Namespace Identifier Descriptor: NIDT = Command Set Identifier (04h) */
+	p[0] = 0x04;
+	p[1] = 0x01;
+#if ZNS_IO_COMMAND_SET
+	p[4] = 0x02; /* Zoned Namespace command set (CSI 2) */
+#else
+	p[4] = 0x00; /* NVM command set (CSI 0) */
+#endif
+	/* NIDT = 0 at p[5]: end of descriptor list */
 }
 
 void identify_command_set(unsigned int pBuffer)
