@@ -158,6 +158,7 @@
 #define SC_NAMESPACE_NOT_ATTACHED								0x1A//Namespace Attachment
 #define SC_THIN_PROVISIONING_NOT_SUPPORTED						0x1B//Namespace Management
 #define SC_CONTROLLER_LIST_INVALID								0x1C//Namespace Attachment
+#define SC_INVALID_IO_COMMAND_SET								0x2C//Identify, Namespace Management
 
 /*Status Code - Command Specific Status Values, NVM Command Set */
 #define SC_CONFLICTING_ATTRIBUTES							0x80//Dataset Management, Read, Write

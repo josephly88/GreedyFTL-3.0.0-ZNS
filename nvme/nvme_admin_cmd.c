@@ -57,6 +57,42 @@
 
 extern NVME_CONTEXT g_nvmeTask;
 
+static void nvme_admin_set_cpl_status(NVME_COMPLETION *nvmeCPL, unsigned char sct, unsigned char sc, unsigned char dnr)
+{
+	NVME_COMPLETION cpl;
+
+	cpl.dword[0] = 0;
+	cpl.statusField.SCT = sct;
+	cpl.statusField.SC = sc;
+	cpl.statusField.DNR = dnr;
+	cpl.specific = 0;
+	nvmeCPL->dword[0] = cpl.dword[0];
+	nvmeCPL->specific = 0;
+}
+
+static void identify_tx_data_to_host(NVME_ADMIN_COMMAND *nvmeAdminCmd, unsigned int pIdentifyData)
+{
+	unsigned int prp[2];
+	unsigned int prpLen;
+
+	prp[0] = nvmeAdminCmd->PRP1[0];
+	prp[1] = nvmeAdminCmd->PRP1[1];
+
+	prpLen = 0x1000 - (prp[0] & 0xFFF);
+	set_direct_tx_dma(pIdentifyData, prp[1], prp[0], prpLen);
+
+	if(prpLen != 0x1000)
+	{
+		pIdentifyData = pIdentifyData + prpLen;
+		prpLen = 0x1000 - prpLen;
+		prp[0] = nvmeAdminCmd->PRP2[0];
+		prp[1] = nvmeAdminCmd->PRP2[1];
+		set_direct_tx_dma(pIdentifyData, prp[1], prp[0], prpLen);
+	}
+
+	check_direct_tx_dma_done();
+}
+
 unsigned int get_num_of_queue(unsigned int dword11)
 {
 	ADMIN_SET_FEATURES_NUMBER_OF_QUEUES_DW11 requested;
@@ -332,30 +368,50 @@ void handle_delete_io_cq(NVME_ADMIN_COMMAND *nvmeAdminCmd, NVME_COMPLETION *nvme
 void handle_identify(NVME_ADMIN_COMMAND *nvmeAdminCmd, NVME_COMPLETION *nvmeCPL)
 {
 	ADMIN_IDENTIFY_COMMAND_DW10 identifyInfo;
+	ADMIN_IDENTIFY_COMMAND_DW11 dw11;
 	unsigned int pIdentifyData = ADMIN_CMD_DRAM_DATA_BUFFER;
-	unsigned int prp[2];
-	unsigned int prpLen;
+	unsigned int identifyOk;
 
 	identifyInfo.dword = nvmeAdminCmd->dword10;
+	dw11.dword = nvmeAdminCmd->dword11;
+	identifyOk = 1;
 
 	if((nvmeAdminCmd->PRP1[0] & 0xF) != 0 || (nvmeAdminCmd->PRP2[0] & 0xF) != 0)
-		xil_printf("NI: %X, %X, %X, %X\r\n", nvmeAdminCmd->PRP1[1], nvmeAdminCmd->PRP1[0], nvmeAdminCmd->PRP2[1], nvmeAdminCmd->PRP2[0]);
-	ASSERT((nvmeAdminCmd->PRP1[0] & 0xF) == 0 && (nvmeAdminCmd->PRP2[0] & 0xF) == 0);
+	{
+		xil_printf("Identify PRP offset invalid: %X, %X, %X, %X\r\n", nvmeAdminCmd->PRP1[1], nvmeAdminCmd->PRP1[0], nvmeAdminCmd->PRP2[1], nvmeAdminCmd->PRP2[0]);
+		nvme_admin_set_cpl_status(nvmeCPL, SCT_GENERIC_COMMAND_STATUS, SC_PRP_OFFSET_INVALID, 0);
+		return;
+	}
 
 	if(identifyInfo.CNS == 0x0)
 	{
 		if((nvmeAdminCmd->PRP1[0] & 0x3) != 0 || (nvmeAdminCmd->PRP2[0] & 0x3) != 0)
-			xil_printf("NI: %X, %X, %X, %X\r\n", nvmeAdminCmd->PRP1[1], nvmeAdminCmd->PRP1[0], nvmeAdminCmd->PRP2[1], nvmeAdminCmd->PRP2[0]);
-		ASSERT(nvmeAdminCmd->NSID == 1);
-		ASSERT((nvmeAdminCmd->PRP1[0] & 0x3) == 0 && (nvmeAdminCmd->PRP2[0] & 0x3) == 0);
+		{
+			xil_printf("Identify NS PRP invalid: %X, %X, %X, %X\r\n", nvmeAdminCmd->PRP1[1], nvmeAdminCmd->PRP1[0], nvmeAdminCmd->PRP2[1], nvmeAdminCmd->PRP2[0]);
+			nvme_admin_set_cpl_status(nvmeCPL, SCT_GENERIC_COMMAND_STATUS, SC_PRP_OFFSET_INVALID, 0);
+			return;
+		}
+		if(nvmeAdminCmd->NSID != 1)
+		{
+			xil_printf("Identify NS invalid NSID: 0x%x\r\n", nvmeAdminCmd->NSID);
+			nvme_admin_set_cpl_status(nvmeCPL, SCT_GENERIC_COMMAND_STATUS, SC_INVALID_NAMESPACE_OR_FORMAT, 0);
+			return;
+		}
 		identify_namespace(pIdentifyData);
 	}
 	else if(identifyInfo.CNS == 0x1)
 	{
 		if((nvmeAdminCmd->PRP1[0] & 0x3) != 0 || (nvmeAdminCmd->PRP2[0] & 0x3) != 0)
-			xil_printf("CI: %X, %X, %X, %X\r\n", nvmeAdminCmd->PRP1[1], nvmeAdminCmd->PRP1[0], nvmeAdminCmd->PRP2[1], nvmeAdminCmd->PRP2[0]);
-
-		ASSERT((nvmeAdminCmd->PRP1[0] & 0x3) == 0 && (nvmeAdminCmd->PRP2[0] & 0x3) == 0);
+		{
+			xil_printf("Identify ctrl PRP invalid: %X, %X, %X, %X\r\n", nvmeAdminCmd->PRP1[1], nvmeAdminCmd->PRP1[0], nvmeAdminCmd->PRP2[1], nvmeAdminCmd->PRP2[0]);
+			nvme_admin_set_cpl_status(nvmeCPL, SCT_GENERIC_COMMAND_STATUS, SC_PRP_OFFSET_INVALID, 0);
+			return;
+		}
+		if(nvmeAdminCmd->NSID != 0)
+		{
+			nvme_admin_set_cpl_status(nvmeCPL, SCT_GENERIC_COMMAND_STATUS, SC_INVALID_FIELD_IN_COMMAND, 1);
+			return;
+		}
 		identify_controller(pIdentifyData);
 	}
 	else if(identifyInfo.CNS == 0x2)
@@ -364,60 +420,66 @@ void handle_identify(NVME_ADMIN_COMMAND *nvmeAdminCmd, NVME_COMPLETION *nvmeCPL)
 	}
 	else if(identifyInfo.CNS == 0x3)
 	{
+		if(nvmeAdminCmd->NSID == 0)
+		{
+			nvme_admin_set_cpl_status(nvmeCPL, SCT_GENERIC_COMMAND_STATUS, SC_INVALID_FIELD_IN_COMMAND, 0);
+			return;
+		}
 		identify_io_command_set_namespace(pIdentifyData);
 	}
-	else if(identifyInfo.CNS == 0x5){
-		ADMIN_IDENTIFY_COMMAND_DW11 DW11;
-		DW11.dword = nvmeAdminCmd->dword11;
-
-		if(DW11.CSI == 0x0){
+	else if(identifyInfo.CNS == 0x5)
+	{
+		if(dw11.CSI == 0x0)
 			identify_command_set(pIdentifyData);
-		}
-		else if(DW11.CSI == 0x2){
-			if(ZNS_IO_COMMAND_SET){
+		else if(dw11.CSI == 0x2)
+		{
+			if(ZNS_IO_COMMAND_SET)
 				identify_zns_command_set(pIdentifyData);
-			}
-			else{
-				xil_printf("Not Support ZNS IO Command Set - CSI value = 0x%x in CSN = 0x5", DW11.CSI);
-				ASSERT(0);
+			else
+			{
+				xil_printf("Identify CNS 5: ZNS CSI not supported (CSI=0x%x)\r\n", dw11.CSI);
+				identifyOk = 0;
 			}
 		}
-		else{
-			xil_printf("Undefined CSI value = 0x%x in CSN = 0x5", DW11.CSI);
-			ASSERT(0);
+		else
+		{
+			xil_printf("Identify CNS 5: invalid CSI=0x%x\r\n", dw11.CSI);
+			identifyOk = 0;
 		}
 	}
 	else if(identifyInfo.CNS == 0x6)
 	{
-		identify_controller_ioset(pIdentifyData);
+		if(dw11.CSI == 0x0)
+			identify_controller_ioset(pIdentifyData);
+		else if(dw11.CSI == 0x2)
+		{
+			if(ZNS_IO_COMMAND_SET)
+				identify_controller_ioset(pIdentifyData);
+			else
+			{
+				xil_printf("Identify CNS 6: ZNS CSI not supported (CSI=0x%x)\r\n", dw11.CSI);
+				identifyOk = 0;
+			}
+		}
+		else
+		{
+			xil_printf("Identify CNS 6: invalid CSI=0x%x\r\n", dw11.CSI);
+			identifyOk = 0;
+		}
 	}
-	else{
-		xil_printf("Undefined CNS value = 0x%x", identifyInfo.CNS);
-		ASSERT(0);
-	}
-	
-	prp[0] = nvmeAdminCmd->PRP1[0];
-	prp[1] = nvmeAdminCmd->PRP1[1];
-
-	prpLen = 0x1000 - (prp[0] & 0xFFF);
-	//	xil_printf("prpLen = %X, prp[1] = %X, prp[0] = %X\r\n",prpLen, prp[1], prp[0]);
-
-	set_direct_tx_dma(pIdentifyData, prp[1], prp[0], prpLen);
-
-	if(prpLen != 0x1000)
+	else
 	{
-		pIdentifyData = pIdentifyData + prpLen;
-		prpLen = 0x1000 - prpLen;
-		prp[0] = nvmeAdminCmd->PRP2[0];
-		prp[1] = nvmeAdminCmd->PRP2[1];
-
-		// ASSERT((prp[1] & 0xFFF) == 0);
-		// xil_printf("prpLen = %X, prp[1] = %X, prp[0] = %X\r\n",prpLen, prp[1], prp[0]);
-
-		set_direct_tx_dma(pIdentifyData, prp[1], prp[0], prpLen);
+		xil_printf("Identify unsupported CNS=0x%x\r\n", identifyInfo.CNS);
+		identifyOk = 0;
 	}
 
-	check_direct_tx_dma_done();
+	if(identifyOk == 0)
+	{
+		nvme_admin_set_cpl_status(nvmeCPL, SCT_GENERIC_COMMAND_STATUS, SC_INVALID_FIELD_IN_COMMAND, 1);
+		return;
+	}
+
+	identify_tx_data_to_host(nvmeAdminCmd, pIdentifyData);
 
 	nvmeCPL->dword[0] = 0;
 	nvmeCPL->specific = 0x0;
@@ -566,7 +628,7 @@ void handle_nvme_admin_cmd(NVME_COMMAND *nvmeCmd)
 		default:
 		{
 			xil_printf("Not Support Admin Command OPC: %X\r\n", opc);
-			ASSERT(0);
+			nvme_admin_set_cpl_status(&nvmeCPL, SCT_GENERIC_COMMAND_STATUS, SC_INVALID_COMMAND_OPCODE, 1);
 			break;
 		}
 	}
