@@ -93,6 +93,28 @@ static void identify_tx_data_to_host(NVME_ADMIN_COMMAND *nvmeAdminCmd, unsigned 
 	check_direct_tx_dma_done();
 }
 
+static void admin_tx_bytes(unsigned int devAddr, unsigned int prp1L, unsigned int prp1H, unsigned int prp2L, unsigned int prp2H, unsigned int dataLen)
+{
+	unsigned int offset;
+	unsigned int chunk;
+
+	offset = prp1L & 0xFFF;
+	chunk = 0x1000 - offset;
+	if(chunk > dataLen)
+		chunk = dataLen;
+
+	set_direct_tx_dma(devAddr, prp1H, prp1L, chunk);
+
+	if(chunk < dataLen)
+	{
+		devAddr += chunk;
+		chunk = dataLen - chunk;
+		set_direct_tx_dma(devAddr, prp2H, prp2L, chunk);
+	}
+
+	check_direct_tx_dma_done();
+}
+
 unsigned int get_num_of_queue(unsigned int dword11)
 {
 	ADMIN_SET_FEATURES_NUMBER_OF_QUEUES_DW11 requested;
@@ -429,38 +451,19 @@ void handle_identify(NVME_ADMIN_COMMAND *nvmeAdminCmd, NVME_COMPLETION *nvmeCPL)
 	}
 	else if(identifyInfo.CNS == 0x5)
 	{
-		if(dw11.CSI == 0x0)
-			identify_command_set(pIdentifyData);
-		else if(dw11.CSI == 0x2)
-		{
-			if(ZNS_IO_COMMAND_SET)
-				identify_zns_command_set(pIdentifyData);
-			else
-			{
-				xil_printf("Identify CNS 5: ZNS CSI not supported (CSI=0x%x)\r\n", dw11.CSI);
-				identifyOk = 0;
-			}
-		}
+		/* CNS 05h is per namespace. Linux sends CNTID 0 and NSID 1; do not require NSID 0. */
+		if(ZNS_IO_COMMAND_SET && dw11.CSI == 0x2 && nvmeAdminCmd->NSID == 1)
+			identify_zns_command_set(pIdentifyData);
 		else
 		{
-			xil_printf("Identify CNS 5: invalid CSI=0x%x\r\n", dw11.CSI);
+			xil_printf("Identify CNS 5: invalid CSI=0x%x NSID=0x%x\r\n", dw11.CSI, nvmeAdminCmd->NSID);
 			identifyOk = 0;
 		}
 	}
 	else if(identifyInfo.CNS == 0x6)
 	{
-		if(dw11.CSI == 0x0)
+		if(ZNS_IO_COMMAND_SET && dw11.CSI == 0x2)
 			identify_controller_ioset(pIdentifyData);
-		else if(dw11.CSI == 0x2)
-		{
-			if(ZNS_IO_COMMAND_SET)
-				identify_controller_ioset(pIdentifyData);
-			else
-			{
-				xil_printf("Identify CNS 6: ZNS CSI not supported (CSI=0x%x)\r\n", dw11.CSI);
-				identifyOk = 0;
-			}
-		}
 		else
 		{
 			xil_printf("Identify CNS 6: invalid CSI=0x%x\r\n", dw11.CSI);
@@ -493,34 +496,46 @@ void handle_abort(NVME_ADMIN_COMMAND *nvmeAdminCmd, NVME_COMPLETION *nvmeCPL)
 
 void handle_get_log_page(NVME_ADMIN_COMMAND *nvmeAdminCmd, NVME_COMPLETION *nvmeCPL)
 {
-	//ADMIN_GET_LOG_PAGE_DW10 getLogPageInfo;
+	ADMIN_GET_LOG_PAGE_DW10 getLogPageInfo;
+	unsigned int byteCount;
+	unsigned int *log;
 
-	//unsigned int prp1[2];
-	//unsigned int prp2[2];
-	//unsigned int prpLen;
-
-	//getLogPageInfo.dword = nvmeAdminCmd->dword10;
-
-	//prp1[0] = nvmeAdminCmd->PRP1[0];
-	//prp1[1] = nvmeAdminCmd->PRP1[1];
-	//prpLen = 0x1000 - (prp1[0] & 0xFFF);
-
-	//prp2[0] = nvmeAdminCmd->PRP2[0];
-	//prp2[1] = nvmeAdminCmd->PRP2[1];
-
-	//xil_printf("ADMIN GET LOG PAGE\n");
-
-	//LID
-	//Mandatory//1-Error information, 2-SMART/Health information, 3-Firmware Slot information
-	//Optional//4-ChangedNamespaceList, 5-Command Effects Log
-	//xil_printf("LID: 0x%X, NUMD: 0x%X \r\n", getLogPageInfo.LID, getLogPageInfo.NUMD);
-
-	//xil_printf("PRP1[63:32] = 0x%X, PRP1[31:0] = 0x%X", prp1[1], prp1[0]);
-	//xil_printf("PRP2[63:32] = 0x%X, PRP2[31:0] = 0x%X", prp2[1], prp2[0]);
+	getLogPageInfo.dword = nvmeAdminCmd->dword10;
 
 	nvmeCPL->dword[0] = 0;
-	nvmeCPL->statusField.SCT = 1;
-	nvmeCPL->specific = 0x9;//invalid log page
+	nvmeCPL->specific = 0x0;
+
+	if((nvmeAdminCmd->PRP1[0] & 0x3) != 0 || (nvmeAdminCmd->PRP2[0] & 0x3) != 0)
+	{
+		nvme_admin_set_cpl_status(nvmeCPL, SCT_GENERIC_COMMAND_STATUS, SC_PRP_OFFSET_INVALID, 1);
+		return;
+	}
+
+	/* LID 05h Command Effects. NUMD is a zero-based 12-bit dword count (max 4096 bytes). */
+	if(getLogPageInfo.LID != 0x05)
+	{
+		nvmeCPL->statusField.SCT = SCT_COMMAND_SPECIFIC_STATUS;
+		nvmeCPL->statusField.SC = SC_INVALID_LOG_PAGE;
+		nvmeCPL->statusField.DNR = 1;
+		return;
+	}
+
+	byteCount = ((unsigned int)getLogPageInfo.NUMD + 1) * 4;
+	if(byteCount > 4096)
+		byteCount = 4096;
+
+	log = (unsigned int *)ADMIN_CMD_DRAM_DATA_BUFFER;
+	memset(log, 0, 4096);
+
+	/* Bytes 1024..2047 are the 256 I/O command effect entries. Bit 0 is CSUPP. */
+	log[256 + IO_NVM_FLUSH] = 0x1;
+	log[256 + IO_NVM_WRITE] = 0x1;
+	log[256 + IO_NVM_READ] = 0x1;
+	log[256 + IO_ZNS_MANAGEMENT_SEND] = 0x1;
+	log[256 + IO_ZNS_MANAGEMENT_RECEIVE] = 0x1;
+	log[256 + IO_ZNS_ZONE_APPEND] = 0x1;
+
+	admin_tx_bytes(ADMIN_CMD_DRAM_DATA_BUFFER, nvmeAdminCmd->PRP1[0], nvmeAdminCmd->PRP1[1], nvmeAdminCmd->PRP2[0], nvmeAdminCmd->PRP2[1], byteCount);
 }
 
 void handle_nvme_admin_cmd(NVME_COMMAND *nvmeCmd)

@@ -7,6 +7,8 @@ void InitZNS();
 
 void ZnsAbortNvmeIo(unsigned int cmdSlotTag, unsigned char sct, unsigned char sc, unsigned char dnr);
 
+unsigned short ZnsStatusWord(unsigned char sct, unsigned char sc, unsigned char dnr);
+
 void parameterCheck();
 
 void resetZoneReg(int ZoneRegID);

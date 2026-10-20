@@ -493,7 +493,19 @@ typedef struct _ADMIN_IDENTIFY_CONTROLLER
 	unsigned char CMIC;
 	unsigned char MDTS;
 	unsigned short CNTLID;
-	unsigned char reserved0[176];
+	unsigned int VER;
+	unsigned int RTD3R;
+	unsigned int RTD3E;
+	unsigned int OAES;
+	unsigned int CTRATT;
+	unsigned short RRLS;
+	unsigned char reserved102[9];
+	unsigned char CNTRLTYPE;
+	unsigned char FGUID[16];
+	unsigned short CRDT1;
+	unsigned short CRDT2;
+	unsigned short CRDT3;
+	unsigned char reserved134[122];
 
 	struct
 	{
@@ -603,6 +615,10 @@ typedef struct _ADMIN_IDENTIFY_CONTROLLER
 	unsigned char VS[1024];
 
 } ADMIN_IDENTIFY_CONTROLLER;
+
+typedef char admin_id_oacs_at_256[((unsigned int)__builtin_offsetof(ADMIN_IDENTIFY_CONTROLLER, OACS) == 256) ? 1 : -1];
+typedef char admin_id_sqes_at_512[((unsigned int)__builtin_offsetof(ADMIN_IDENTIFY_CONTROLLER, SQES) == 512) ? 1 : -1];
+typedef char admin_id_nn_at_516[((unsigned int)__builtin_offsetof(ADMIN_IDENTIFY_CONTROLLER, NN) == 516) ? 1 : -1];
 
 
 /* Identify - LBA Format Data Structure */

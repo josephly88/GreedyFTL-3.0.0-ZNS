@@ -87,6 +87,9 @@ void identify_controller(unsigned int pBuffer)
 	identifyCNTL->CMIC = 0x0;
 	identifyCNTL->MDTS = 0x8;
 	identifyCNTL->CNTLID = 0x9;
+	identifyCNTL->VER = 0x00020000;
+	identifyCNTL->CTRATT = 0;
+	identifyCNTL->CNTRLTYPE = 1;
 
 	identifyCNTL->OACS.supportsSecuritySendSecurityReceive = 0x0;
 	identifyCNTL->OACS.supportsFormatNVM = 0x0;
@@ -99,6 +102,7 @@ void identify_controller(unsigned int pBuffer)
 	identifyCNTL->FRMW.supportedNumberOfFirmwareSlots = 0x1;
 
 	identifyCNTL->LPA.supportsSMARTHealthInformationLogPage = 0x0;
+	identifyCNTL->LPA.suppottsCommandEffectsLogPage = 0x1;
 
 	identifyCNTL->ELPE = 0x8;
 	identifyCNTL->NPSS = 0x0;
@@ -235,8 +239,6 @@ void identify_command_set(unsigned int pBuffer)
 	identify4096B = (ADMIN_IDENTIFY_4096B*)pBuffer;
 
 	memset(identify4096B, 0, sizeof(ADMIN_IDENTIFY_4096B));
-
-	identify4096B->id0 = 0x2;
 }
 
 void identify_zns_command_set(unsigned int pBuffer)
@@ -246,9 +248,13 @@ void identify_zns_command_set(unsigned int pBuffer)
 
 	memset(identifyZnsCmdSet, 0, sizeof(ADMIN_IDENTIFY_ZNS_COMMAND_SET));
 
-	identifyZnsCmdSet->MAR = MAXIMUM_ACTIVE_ZONE_COUNT;
-	identifyZnsCmdSet->MOR = MAXIMUM_OPEN_ZONE_COUNT;
+	/* 0's-based resource limits. Linux 5.15 uses advertised + 1. */
+	identifyZnsCmdSet->ZOC = 0;
+	identifyZnsCmdSet->OZCS = 0;
+	identifyZnsCmdSet->MAR = MAXIMUM_ACTIVE_ZONE_COUNT - 1;
+	identifyZnsCmdSet->MOR = MAXIMUM_OPEN_ZONE_COUNT - 1;
 	identifyZnsCmdSet->LBAFE[0].ZSZE = NVME_BLOCKS_PER_ZONE;
+	identifyZnsCmdSet->LBAFE[0].ZDES = 0;
 }
 
 void identify_controller_ioset(unsigned int pBuffer)

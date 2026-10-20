@@ -96,7 +96,7 @@ void ReqTransNvmeToSlice(unsigned int cmdSlotTag, unsigned int startLba, unsigne
 		assert(!"[WARNING] Not supported command code [WARNING]");
 
 	if(ZNS_IO_COMMAND_SET){
-		if(startLba >= ZNS_LBA_START_NVME_BLOCK && startLba < ZNS_LBA_END_NVME_BLOCK){
+		if(startLba >= ZNS_LBA_START_NVME_BLOCK && startLba <= ZNS_LBA_END_NVME_BLOCK){
 			//xil_printf("Before: tempLsa = %d\r\n", tempLsa);
 
 			unsigned int zoneID = Lba2ZoneId(startLba);

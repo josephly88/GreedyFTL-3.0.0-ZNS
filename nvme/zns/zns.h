@@ -7,7 +7,7 @@
 /*-------------------------------------------------------------
 		Section : Input Parameters
 -------------------------------------------------------------*/
-#define ZNS_IO_COMMAND_SET									0			// 0-Normal, 1-ZNS
+#define ZNS_IO_COMMAND_SET									1			// 0-Normal, 1-ZNS
 
 // Row Group: 1-8192 (Must be a factor of 8192 (USER_BLOCKS_PER_DIE). E.g., 8192 / 1024 = 8 that has no remainder)
 #define NUM_OF_BLOCK_PER_ZONE								8			// 1 Block : 2MB
@@ -18,7 +18,7 @@
 
 #define MAXIMUM_OPEN_ZONE_COUNT                  			10
 #define MAXIMUM_ACTIVE_ZONE_COUNT                  			10
-#define ZNS_LBA_START_NVME_BLOCK							0x800000	// 0x800000 * 0x1000 (NVMe Block Size: 4KB) = 32GB
+#define ZNS_LBA_START_NVME_BLOCK							0			// zone 0 starts at host LBA 0
 
 // 0-Channel Oriented, 1-Way Oriented
 #define CHANNEL_WAY_ORIENTED								0
@@ -151,6 +151,15 @@ typedef struct _WRR
 /*Opcodes for ZNS IO Commands */
 #define IO_ZNS_MANAGEMENT_SEND								0x79
 #define IO_ZNS_MANAGEMENT_RECEIVE							0x7A
+#define IO_ZNS_ZONE_APPEND									0x7D
+
+/* Zone Management Receive action */
+#define ZRA_REPORT_ZONES									0x00
+
+/* Report Zones buffer in the reserved DRAM window (not the admin Identify buffer) */
+#define ZNS_ZONE_REPORT_DRAM_ADDR							0x00300000
+#define ZNS_ZONE_REPORT_DRAM_SIZE							(1024 * 1024)
+#define ZNS_PRP_LIST_DRAM_ADDR								0x00400000
 
 /* Zone Descriptor - Zone State (ZS) */
 #define EMPTY												0x1
@@ -178,21 +187,12 @@ typedef struct _WRR
 #define OFFLINE_ZONE										0x5
 #define SET_ZONE_DESCRIPTOR_EXTENSION						0x10
 
-/* ZNS Identify Namespace Data Structure */
+/* ZNS Identify Namespace Data Structure (4096 bytes, LBAFE[0] at offset 2816) */
+#pragma pack(push, 1)
 typedef struct _ADMIN_IDENTIFY_ZNS_COMMAND_SET
 {
-	struct
-	{
-		unsigned char variableZoneCapacity					:1;
-		unsigned char zoneActiveExcursions					:1;
-		unsigned int reserved0								:14;
-	} ZOC;
-
-	struct
-	{
-		unsigned char readAcrossZoneBoundaries				:1;
-		unsigned int reserved0								:15;
-	}OZCS;
+	unsigned short ZOC;
+	unsigned short OZCS;
 
 	unsigned int MAR;
 	unsigned int MOR;
@@ -211,10 +211,10 @@ typedef struct _ADMIN_IDENTIFY_ZNS_COMMAND_SET
 	{
 		unsigned long long ZSZE;
 		unsigned char ZDES;
-		unsigned int reserve0;
-	}LBAFE[64];
+		unsigned char reserved[7];
+	} LBAFE[64];
 
-	unsigned char reserved1[256];
+	unsigned char vendor[256];
 
 }ADMIN_IDENTIFY_ZNS_COMMAND_SET;
 
@@ -246,38 +246,30 @@ typedef struct _IO_ZNS_ZONE_MANAGEMENT_RECEIVE_DW13
 
 
 
+/* Byte 0: ZT in bits 3:0. Byte 1: ZS in bits 7:4 (Linux reads zone condition as zs >> 4). */
 typedef struct _ZONE_DESCRIPTOR
 {
-	unsigned char ZT						:4;
-	unsigned char reserved0					:4;
-	unsigned char reserved1					:4;
-	unsigned char ZS						:4;
-	struct
-	{
-		unsigned char ZFC					:1;
-		unsigned char FZR					:1;
-		unsigned char RZR					:1;
-		unsigned char reserved0				:4;
-		unsigned char ZDEV					:1;
-	} ZA;
-	struct
-	{
-		unsigned char FZRTL					:2;
-		unsigned char RZRTL					:2;
-		unsigned char reserved0				:4;
-	} ZAI;
-	unsigned int reserved2;
+	unsigned char ZT;
+	unsigned char ZS;
+	unsigned char ZA;
+	unsigned char ZAI;
+	unsigned char reserved2[4];
 	unsigned long long ZCAP;
 	unsigned long long ZSLBA;
 	unsigned long long WP;
-	unsigned long long reserved3[4];
+	unsigned char reserved3[32];
 } ZONE_DESCRIPTOR;
 
 typedef struct _IO_ZNS_MANAGEMENT_RECEIVE_ZONE_REPORT
 {
 	unsigned long long num_zone;
-	unsigned long long reserved0[7];
+	unsigned char reserved0[56];
 	ZONE_DESCRIPTOR zone_descriptor[MAXIMUM_OPEN_ZONE_COUNT];
 } IO_ZNS_MANAGEMENT_RECEIVE_ZONE_REPORT;
+#pragma pack(pop)
+
+typedef char zns_identify_is_4096[(sizeof(ADMIN_IDENTIFY_ZNS_COMMAND_SET) == 4096) ? 1 : -1];
+typedef char zns_lbafe_at_2816[((unsigned int)__builtin_offsetof(ADMIN_IDENTIFY_ZNS_COMMAND_SET, LBAFE) == 2816) ? 1 : -1];
+typedef char zns_zone_desc_is_64[(sizeof(ZONE_DESCRIPTOR) == 64) ? 1 : -1];
 
 #endif

@@ -1,139 +1,198 @@
 #include "zns_mgmt.h"
 #include "../../memory_map.h"
 #include "zns_request_handler.h"
+#include "../nvme.h"
 
 #include "xil_printf.h"
 
-void handle_zns_close_zone(IO_ZNS_ZONE_MANGAEMENT_SEND_DW13 mgmtSendInfo, unsigned long long SLBA){
+static unsigned short ZnsInvalidField(void)
+{
+    return ZnsStatusWord(SCT_GENERIC_COMMAND_STATUS, SC_INVALID_FIELD_IN_COMMAND, 1);
+}
+
+static unsigned short ZnsInvalidTransition(void)
+{
+    return ZnsStatusWord(SCT_COMMAND_SPECIFIC_STATUS, SC_ZONE_INVALID_WRITE, 1);
+}
+
+static int ZnsMgmtZoneId(unsigned long long SLBA, unsigned int *zoneId)
+{
     P_ZONE_MAP zoneMapPtr = (P_ZONE_MAP) ZONE_MAP_ADDR;
+    unsigned int id;
 
-    if(mgmtSendInfo.SELECT_ALL == 1){
-        int i;
-        for(i = 0; i < MAXIMUM_OPEN_ZONE_COUNT; i++){
-            if(zoneMapPtr->zoneReg[i].Zone_State == EXPLICITLY_OPENED || zoneMapPtr->zoneReg[i].Zone_State == IMPLICITLY_OPENED){
-                zoneMapPtr->zoneReg[i].Zone_State = CLOSED;
-                // UNMAP A FBG
-            }
-        }
-    }
-    else{
-        unsigned int zone_id = (SLBA - ZNS_LBA_START_NVME_BLOCK) / NVME_BLOCKS_PER_ZONE;
+    if(SLBA > ZNS_LBA_END_NVME_BLOCK)
+        return -1;
 
-        if(zone_id >= MAXIMUM_OPEN_ZONE_COUNT){
-            xil_printf("SLBA out of range: 0x%X\r\n", SLBA);
-            return;
-        }
+    id = (unsigned int)Lba2ZoneId(SLBA);
+    if(id >= MAXIMUM_ACTIVE_ZONE_COUNT)
+        return -1;
+    if((unsigned long long)zoneMapPtr->zoneReg[id].SLBA != SLBA)
+        return -1;
 
-        unsigned char cur_state = zoneMapPtr->zoneReg[zone_id].Zone_State;
-        if(cur_state == EXPLICITLY_OPENED || cur_state == IMPLICITLY_OPENED){
-            zoneMapPtr->zoneReg[zone_id].Zone_State = CLOSED;
-            // UNMAP A FBG
-        }
-        else if(cur_state == EMPTY || cur_state == FULL || cur_state == READ_ONLY || cur_state == OFFLINE){
-            // Abort
-        }
+    *zoneId = id;
+    return 0;
+}
+
+static void ZnsDropOpenCount(P_ZONE_MAP zoneMapPtr, unsigned char state)
+{
+    if(state == IMPLICITLY_OPENED || state == EXPLICITLY_OPENED)
+    {
+        if(zoneMapPtr->Num_Open_Zone > 0)
+            zoneMapPtr->Num_Open_Zone--;
     }
 }
 
-void handle_zns_finish_zone(IO_ZNS_ZONE_MANGAEMENT_SEND_DW13 mgmtSendInfo, unsigned long long SLBA){
+static unsigned short ZnsCloseOne(P_ZONE_MAP zoneMapPtr, unsigned int zoneId, unsigned int selectAll)
+{
+    unsigned char cur_state = zoneMapPtr->zoneReg[zoneId].Zone_State;
+
+    if(cur_state == EXPLICITLY_OPENED || cur_state == IMPLICITLY_OPENED)
+    {
+        zoneMapPtr->zoneReg[zoneId].Zone_State = CLOSED;
+        ZnsDropOpenCount(zoneMapPtr, cur_state);
+        return 0;
+    }
+
+    if(selectAll)
+        return 0;
+    return ZnsInvalidTransition();
+}
+
+unsigned short handle_zns_close_zone(IO_ZNS_ZONE_MANGAEMENT_SEND_DW13 mgmtSendInfo, unsigned long long SLBA){
     P_ZONE_MAP zoneMapPtr = (P_ZONE_MAP) ZONE_MAP_ADDR;
 
     if(mgmtSendInfo.SELECT_ALL == 1){
-        int i;
-        for(i = 0; i < MAXIMUM_OPEN_ZONE_COUNT; i++){
-            if(zoneMapPtr->zoneReg[i].Zone_State == IMPLICITLY_OPENED || zoneMapPtr->zoneReg[i].Zone_State == EXPLICITLY_OPENED
-                    || zoneMapPtr->zoneReg[i].Zone_State == CLOSED){
-                zoneMapPtr->zoneReg[i].Zone_State = FULL;
-                // UNMAP A FBG
-            }
+        unsigned int i;
+        for(i = 0; i < MAXIMUM_ACTIVE_ZONE_COUNT; i++){
+            unsigned short status = ZnsCloseOne(zoneMapPtr, i, 1);
+            if(status != 0)
+                return status;
         }
+        return 0;
     }
-    else{
-        unsigned int zone_id = (SLBA - ZNS_LBA_START_NVME_BLOCK) / NVME_BLOCKS_PER_ZONE;
 
-        if(zone_id >= MAXIMUM_OPEN_ZONE_COUNT){
-            xil_printf("SLBA out of range: 0x%X\r\n", SLBA);
-            return;
-        }
-
-        unsigned char cur_state = zoneMapPtr->zoneReg[zone_id].Zone_State;
-        if(cur_state == EMPTY || cur_state == IMPLICITLY_OPENED || cur_state == EXPLICITLY_OPENED || cur_state == CLOSED){
-            zoneMapPtr->zoneReg[zone_id].Zone_State = FINISH_ZONE;
-            // UNMAP A FBG
-        }
-        else if(cur_state == READ_ONLY || cur_state == FULL){
-            // Abort
-        }
+    {
+        unsigned int zone_id;
+        if(ZnsMgmtZoneId(SLBA, &zone_id) != 0)
+            return ZnsInvalidField();
+        return ZnsCloseOne(zoneMapPtr, zone_id, 0);
     }
 }
 
-void handle_zns_open_zone(IO_ZNS_ZONE_MANGAEMENT_SEND_DW13 mgmtSendInfo, unsigned long long SLBA){
+static unsigned short ZnsFinishOne(P_ZONE_MAP zoneMapPtr, unsigned int zoneId, unsigned int selectAll)
+{
+    unsigned char cur_state = zoneMapPtr->zoneReg[zoneId].Zone_State;
+
+    if(cur_state == EMPTY || cur_state == IMPLICITLY_OPENED || cur_state == EXPLICITLY_OPENED || cur_state == CLOSED)
+    {
+        ZnsDropOpenCount(zoneMapPtr, cur_state);
+        zoneMapPtr->zoneReg[zoneId].Zone_State = FULL;
+        return 0;
+    }
+
+    if(cur_state == FULL || selectAll)
+        return 0;
+    return ZnsInvalidTransition();
+}
+
+unsigned short handle_zns_finish_zone(IO_ZNS_ZONE_MANGAEMENT_SEND_DW13 mgmtSendInfo, unsigned long long SLBA){
     P_ZONE_MAP zoneMapPtr = (P_ZONE_MAP) ZONE_MAP_ADDR;
 
     if(mgmtSendInfo.SELECT_ALL == 1){
-        int i;
-        for(i = 0; i < MAXIMUM_OPEN_ZONE_COUNT; i++){
-            if(zoneMapPtr->zoneReg[i].Zone_State == CLOSED){
-                zoneMapPtr->zoneReg[i].Zone_State = EXPLICITLY_OPENED;
-                // MAP A FBG
-            }
+        unsigned int i;
+        for(i = 0; i < MAXIMUM_ACTIVE_ZONE_COUNT; i++){
+            unsigned short status = ZnsFinishOne(zoneMapPtr, i, 1);
+            if(status != 0)
+                return status;
         }
+        return 0;
     }
-    else{
-        unsigned int zone_id = (SLBA - ZNS_LBA_START_NVME_BLOCK) / NVME_BLOCKS_PER_ZONE;
 
-        if(zone_id >= MAXIMUM_OPEN_ZONE_COUNT){
-            xil_printf("SLBA out of range: 0x%X\r\n", SLBA);
-            return;
-        }
-
-        unsigned char cur_state = zoneMapPtr->zoneReg[zone_id].Zone_State;
-        if(cur_state == EMPTY || cur_state == IMPLICITLY_OPENED || cur_state == CLOSED){
-            zoneMapPtr->zoneReg[zone_id].Zone_State = EXPLICITLY_OPENED;
-            // MAP A FBG
-        }
-        else if(cur_state == READ_ONLY || cur_state == OFFLINE){
-            // Abort
-        }
+    {
+        unsigned int zone_id;
+        if(ZnsMgmtZoneId(SLBA, &zone_id) != 0)
+            return ZnsInvalidField();
+        return ZnsFinishOne(zoneMapPtr, zone_id, 0);
     }
 }
 
-void handle_zns_reset_zone(IO_ZNS_ZONE_MANGAEMENT_SEND_DW13 mgmtSendInfo, unsigned long long SLBA){
+static unsigned short ZnsOpenOne(P_ZONE_MAP zoneMapPtr, unsigned int zoneId, unsigned int selectAll)
+{
+    unsigned char cur_state = zoneMapPtr->zoneReg[zoneId].Zone_State;
+
+    if(cur_state == EXPLICITLY_OPENED)
+        return 0;
+
+    if(cur_state == EMPTY || cur_state == IMPLICITLY_OPENED || cur_state == CLOSED)
+    {
+        if(cur_state != IMPLICITLY_OPENED)
+        {
+            if(zoneMapPtr->Num_Open_Zone >= MAXIMUM_OPEN_ZONE_COUNT)
+                return ZnsStatusWord(SCT_COMMAND_SPECIFIC_STATUS, SC_TOO_MANY_OPEN_ZONES, 1);
+            zoneMapPtr->Num_Open_Zone++;
+        }
+        zoneMapPtr->zoneReg[zoneId].Zone_State = EXPLICITLY_OPENED;
+        return 0;
+    }
+
+    if(selectAll)
+        return 0;
+    return ZnsInvalidTransition();
+}
+
+unsigned short handle_zns_open_zone(IO_ZNS_ZONE_MANGAEMENT_SEND_DW13 mgmtSendInfo, unsigned long long SLBA){
+    P_ZONE_MAP zoneMapPtr = (P_ZONE_MAP) ZONE_MAP_ADDR;
+
+    if(mgmtSendInfo.SELECT_ALL == 1){
+        unsigned int i;
+        for(i = 0; i < MAXIMUM_ACTIVE_ZONE_COUNT; i++){
+            unsigned short status = ZnsOpenOne(zoneMapPtr, i, 1);
+            if(status != 0)
+                return status;
+        }
+        return 0;
+    }
+
+    {
+        unsigned int zone_id;
+        if(ZnsMgmtZoneId(SLBA, &zone_id) != 0)
+            return ZnsInvalidField();
+        return ZnsOpenOne(zoneMapPtr, zone_id, 0);
+    }
+}
+
+unsigned short handle_zns_reset_zone(IO_ZNS_ZONE_MANGAEMENT_SEND_DW13 mgmtSendInfo, unsigned long long SLBA){
     P_ZONE_MAP zoneMapPtr = (P_ZONE_MAP) ZONE_MAP_ADDR;
 
     if(mgmtSendInfo.SELECT_ALL == 1){
         int ZoneID;
         for(ZoneID = 0; ZoneID < MAXIMUM_ACTIVE_ZONE_COUNT; ZoneID++){
-            ZONE_REG* zoneReg = &zoneMapPtr->zoneReg[ZoneID];
-            unsigned char cur_state = zoneReg->Zone_State;
+            unsigned char cur_state = zoneMapPtr->zoneReg[ZoneID].Zone_State;
 
             if(cur_state == IMPLICITLY_OPENED || cur_state == EXPLICITLY_OPENED || cur_state == CLOSED || cur_state == FULL){
                 resetZone(ZoneID);
-                
-                if(cur_state == IMPLICITLY_OPENED || cur_state == EXPLICITLY_OPENED)
-                    zoneMapPtr->Num_Open_Zone--;
-            }                
+                ZnsDropOpenCount(zoneMapPtr, cur_state);
+            }
         }
+        return 0;
     }
-    else{
-        unsigned int ZoneID = Lba2ZoneId(SLBA);
 
-        if(ZoneID >= MAXIMUM_ACTIVE_ZONE_COUNT){
-            xil_printf("SLBA out of range: 0x%X\r\n", SLBA);
-            return;
-        }
+    {
+        unsigned int ZoneID;
+        unsigned char cur_state;
 
-        unsigned char cur_state = zoneMapPtr->zoneReg[ZoneID].Zone_State;
+        if(ZnsMgmtZoneId(SLBA, &ZoneID) != 0)
+            return ZnsInvalidField();
+
+        cur_state = zoneMapPtr->zoneReg[ZoneID].Zone_State;
+        if(cur_state == EMPTY)
+            return 0;
         if(cur_state == IMPLICITLY_OPENED || cur_state == EXPLICITLY_OPENED || cur_state == CLOSED || cur_state == FULL){
             resetZone(ZoneID);
-
-            if(cur_state == IMPLICITLY_OPENED || cur_state == EXPLICITLY_OPENED)
-                zoneMapPtr->Num_Open_Zone--;
+            ZnsDropOpenCount(zoneMapPtr, cur_state);
+            return 0;
         }
-        else if(cur_state == READ_ONLY || cur_state == OFFLINE){
-            // Abort
-            xil_printf("Zone State is not active: Current State - 0x%X\r\n", cur_state);
-        }
+        return ZnsInvalidTransition();
     }
 }
 
@@ -203,34 +262,8 @@ void resetZone(unsigned int zoneId){
     resetZoneReg(zoneId);
 }
 
-void handle_zns_offline_zone(IO_ZNS_ZONE_MANGAEMENT_SEND_DW13 mgmtSendInfo, unsigned long long SLBA){
-    P_ZONE_MAP zoneMapPtr = (P_ZONE_MAP) ZONE_MAP_ADDR;
-
-    if(mgmtSendInfo.SELECT_ALL == 1){
-        int i;
-        for(i = 0; i < MAXIMUM_OPEN_ZONE_COUNT; i++){
-            if(zoneMapPtr->zoneReg[i].Zone_State == READ_ONLY){
-                zoneMapPtr->zoneReg[i].Zone_State = OFFLINE;
-                // UNMAP A FBG
-            }
-        }
-    }
-    else{
-        unsigned int zone_id = (SLBA - ZNS_LBA_START_NVME_BLOCK) / NVME_BLOCKS_PER_ZONE;
-
-        if(zone_id >= MAXIMUM_OPEN_ZONE_COUNT){
-            xil_printf("SLBA out of range: 0x%X\r\n", SLBA);
-            return;
-        }
-
-        unsigned char cur_state = zoneMapPtr->zoneReg[zone_id].Zone_State;
-        if(cur_state == READ_ONLY){
-            zoneMapPtr->zoneReg[zone_id].Zone_State = OFFLINE;
-            // UNMAP A FBG
-        }
-        else if(cur_state == EMPTY || cur_state == IMPLICITLY_OPENED 
-            || cur_state == EXPLICITLY_OPENED || cur_state == CLOSED || cur_state == FULL){
-            // Abort
-        }
-    }
+unsigned short handle_zns_offline_zone(IO_ZNS_ZONE_MANGAEMENT_SEND_DW13 mgmtSendInfo, unsigned long long SLBA){
+    (void)mgmtSendInfo;
+    (void)SLBA;
+    return ZnsInvalidField();
 }

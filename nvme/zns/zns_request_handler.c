@@ -22,7 +22,7 @@ P_WRR wrrPtr;
 // {4052, 4057} means virtual blocks 4052 - 4057 are bad blocks
 int BadBlockTuples[] = {4052, 4053, 4064, 4065, 4074, 4075};
 
-void ZnsAbortNvmeIo(unsigned int cmdSlotTag, unsigned char sct, unsigned char sc, unsigned char dnr)
+unsigned short ZnsStatusWord(unsigned char sct, unsigned char sc, unsigned char dnr)
 {
 	NVME_COMPLETION cpl;
 
@@ -30,8 +30,12 @@ void ZnsAbortNvmeIo(unsigned int cmdSlotTag, unsigned char sct, unsigned char sc
 	cpl.statusField.SCT = sct;
 	cpl.statusField.SC = sc;
 	cpl.statusField.DNR = dnr;
-	cpl.specific = 0;
-	set_auto_nvme_cpl(cmdSlotTag, cpl.specific, cpl.statusFieldWord);
+	return cpl.statusFieldWord;
+}
+
+void ZnsAbortNvmeIo(unsigned int cmdSlotTag, unsigned char sct, unsigned char sc, unsigned char dnr)
+{
+	set_auto_nvme_cpl(cmdSlotTag, 0, ZnsStatusWord(sct, sc, dnr));
 }
 
 void InitZNS()
