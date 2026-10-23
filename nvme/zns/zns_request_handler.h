@@ -9,6 +9,14 @@ void ZnsAbortNvmeIo(unsigned int cmdSlotTag, unsigned char sct, unsigned char sc
 
 unsigned short ZnsStatusWord(unsigned char sct, unsigned char sc, unsigned char dnr);
 
+void ZnsAppendArm(unsigned int cmdSlotTag, unsigned int assignedLba);
+
+void ZnsAppendNoteSlice(unsigned int cmdSlotTag);
+
+int ZnsAppendIsActive(unsigned int cmdSlotTag);
+
+void ZnsAppendOnRxDmaDone(unsigned int cmdSlotTag);
+
 void parameterCheck();
 
 void resetZoneReg(int ZoneRegID);

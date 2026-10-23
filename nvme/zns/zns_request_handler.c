@@ -22,6 +22,83 @@ P_WRR wrrPtr;
 // {4052, 4057} means virtual blocks 4052 - 4057 are bad blocks
 int BadBlockTuples[] = {4052, 4053, 4064, 4065, 4074, 4075};
 
+#define ZNS_APPEND_SLOT_COUNT	(1u << P_SLOT_TAG_WIDTH)
+
+typedef struct _ZNS_APPEND_CPL
+{
+	unsigned int assignedLba;
+	unsigned int slicesLeft;
+	unsigned char valid;
+} ZNS_APPEND_CPL;
+
+static ZNS_APPEND_CPL znsAppendCpl[ZNS_APPEND_SLOT_COUNT];
+
+static void ZnsAppendDisarm(unsigned int cmdSlotTag)
+{
+	if(cmdSlotTag >= ZNS_APPEND_SLOT_COUNT)
+		return;
+
+	znsAppendCpl[cmdSlotTag].valid = 0;
+	znsAppendCpl[cmdSlotTag].slicesLeft = 0;
+}
+
+static void ZnsAppendInit(void)
+{
+	unsigned int i;
+
+	for(i = 0; i < ZNS_APPEND_SLOT_COUNT; i++)
+	{
+		znsAppendCpl[i].assignedLba = 0;
+		znsAppendCpl[i].slicesLeft = 0;
+		znsAppendCpl[i].valid = 0;
+	}
+}
+
+void ZnsAppendArm(unsigned int cmdSlotTag, unsigned int assignedLba)
+{
+	if(cmdSlotTag >= ZNS_APPEND_SLOT_COUNT)
+		return;
+
+	znsAppendCpl[cmdSlotTag].assignedLba = assignedLba;
+	znsAppendCpl[cmdSlotTag].slicesLeft = 0;
+	znsAppendCpl[cmdSlotTag].valid = 1;
+}
+
+void ZnsAppendNoteSlice(unsigned int cmdSlotTag)
+{
+	if(cmdSlotTag >= ZNS_APPEND_SLOT_COUNT)
+		return;
+	if(znsAppendCpl[cmdSlotTag].valid)
+		znsAppendCpl[cmdSlotTag].slicesLeft++;
+}
+
+int ZnsAppendIsActive(unsigned int cmdSlotTag)
+{
+	if(cmdSlotTag >= ZNS_APPEND_SLOT_COUNT)
+		return 0;
+	return znsAppendCpl[cmdSlotTag].valid;
+}
+
+void ZnsAppendOnRxDmaDone(unsigned int cmdSlotTag)
+{
+	unsigned int assignedLba;
+
+	if(cmdSlotTag >= ZNS_APPEND_SLOT_COUNT)
+		return;
+	if(!znsAppendCpl[cmdSlotTag].valid)
+		return;
+	if(znsAppendCpl[cmdSlotTag].slicesLeft == 0)
+		return;
+
+	znsAppendCpl[cmdSlotTag].slicesLeft--;
+	if(znsAppendCpl[cmdSlotTag].slicesLeft != 0)
+		return;
+
+	assignedLba = znsAppendCpl[cmdSlotTag].assignedLba;
+	znsAppendCpl[cmdSlotTag].valid = 0;
+	set_auto_nvme_cpl(cmdSlotTag, assignedLba, 0);
+}
+
 unsigned short ZnsStatusWord(unsigned char sct, unsigned char sc, unsigned char dnr)
 {
 	NVME_COMPLETION cpl;
@@ -35,12 +112,14 @@ unsigned short ZnsStatusWord(unsigned char sct, unsigned char sc, unsigned char 
 
 void ZnsAbortNvmeIo(unsigned int cmdSlotTag, unsigned char sct, unsigned char sc, unsigned char dnr)
 {
+	ZnsAppendDisarm(cmdSlotTag);
 	set_auto_nvme_cpl(cmdSlotTag, 0, ZnsStatusWord(sct, sc, dnr));
 }
 
 void InitZNS()
 {	
 	parameterCheck();
+	ZnsAppendInit();
 
 	// PRINTING
 	xil_printf("\r\n");
@@ -407,7 +486,39 @@ int ZoneWriteCheck(unsigned int zoneID, unsigned int slba, unsigned int nlb,
 		*dnr = 1;
 		return -1;
 	}
-	
+
+	/* Closed is already active. Reopening it only consumes an open resource. */
+	if(zoneMapPtr->zoneReg[zoneID].Zone_State == CLOSED){
+		if(zoneMapPtr->Num_Open_Zone >= MAXIMUM_OPEN_ZONE_COUNT){
+			xil_printf("Maximum Open Zone Count Reached: %d\r\n", MAXIMUM_OPEN_ZONE_COUNT);
+			*sct = SCT_COMMAND_SPECIFIC_STATUS;
+			*sc = SC_TOO_MANY_OPEN_ZONES;
+			*dnr = 0;
+			return -1;
+		}
+		zoneMapPtr->zoneReg[zoneID].Zone_State = IMPLICITLY_OPENED;
+		zoneMapPtr->Num_Open_Zone++;
+
+		if(zoneMapPtr->zoneReg[zoneID].Buffer_ID == -1){
+			int bufferID;
+
+			if(BUFFER_MODE == 0){
+				bufferID = bufferIDFifo_Dequeue();
+				zoneWriteBufMapPtr->zoneWriteBufReg[bufferID].ZoneID = zoneID;
+			}
+			else if(BUFFER_MODE == 1){
+				bufferID = 0;
+			}
+			else{
+				assert(!"[Error] Invalid Buffer Mode [Error]");
+			}
+
+			zoneMapPtr->zoneReg[zoneID].Buffer_ID = bufferID;
+			if(zoneMapPtr->zoneReg[zoneID].Phy_Block_Group_ID == -1)
+				zoneMapPtr->zoneReg[zoneID].Phy_Block_Group_ID = validBlockGroupFifo_Dequeue();
+		}
+	}
+
 	if(zoneMapPtr->zoneReg[zoneID].Zone_State == EMPTY){
 		if(zoneMapPtr->Num_Open_Zone >= MAXIMUM_OPEN_ZONE_COUNT){
 			xil_printf("Maximum Open Zone Count Reached: %d\r\n", MAXIMUM_OPEN_ZONE_COUNT);
