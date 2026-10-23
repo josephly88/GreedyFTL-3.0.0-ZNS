@@ -102,6 +102,9 @@
 #define REQ_OPT_BLOCK_SPACE_MAIN	0
 #define REQ_OPT_BLOCK_SPACE_TOTAL 	1
 
+#define REQ_OPT_ZNS_APPEND_NONE		0
+#define REQ_OPT_ZNS_APPEND			1
+
 #define LOGICAL_SLICE_ADDR_NONE 	0xffffffff
 
 typedef struct _DATA_BUF_INFO{
@@ -149,7 +152,8 @@ typedef struct _REQ_OPTION{
 	unsigned int nandEccWarning : 1;
 	unsigned int rowAddrDependencyCheck : 1;
 	unsigned int blockSpace : 1;
-	unsigned int reserved0 : 24;
+	unsigned int znsAppend : 1;
+	unsigned int reserved0 : 23;
 } REQ_OPTION, *P_REQ_OPTION;
 
 

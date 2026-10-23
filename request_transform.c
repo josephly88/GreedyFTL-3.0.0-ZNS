@@ -148,12 +148,12 @@ void ReqTransNvmeToSlice(unsigned int cmdSlotTag, unsigned int startLba, unsigne
 	reqPoolPtr->reqPool[reqSlotTag].nvmeDmaInfo.startIndex = nvmeDmaStartIndex;
 	reqPoolPtr->reqPool[reqSlotTag].nvmeDmaInfo.nvmeBlockOffset = nvmeBlockOffset;
 	reqPoolPtr->reqPool[reqSlotTag].nvmeDmaInfo.numOfNvmeBlock = tempNumOfNvmeBlock;
-	reqPoolPtr->reqPool[reqSlotTag].reqOpt.reserved0 = 0;
+	reqPoolPtr->reqPool[reqSlotTag].reqOpt.znsAppend = REQ_OPT_ZNS_APPEND_NONE;
 
 	PutToSliceReqQ(reqSlotTag);
 	if(ZnsAppendIsActive(cmdSlotTag))
 	{
-		reqPoolPtr->reqPool[reqSlotTag].reqOpt.reserved0 = 1;
+		reqPoolPtr->reqPool[reqSlotTag].reqOpt.znsAppend = REQ_OPT_ZNS_APPEND;
 		ZnsAppendNoteSlice(cmdSlotTag);
 	}
 
@@ -176,12 +176,12 @@ void ReqTransNvmeToSlice(unsigned int cmdSlotTag, unsigned int startLba, unsigne
 		reqPoolPtr->reqPool[reqSlotTag].nvmeDmaInfo.startIndex = nvmeDmaStartIndex;
 		reqPoolPtr->reqPool[reqSlotTag].nvmeDmaInfo.nvmeBlockOffset = nvmeBlockOffset;
 		reqPoolPtr->reqPool[reqSlotTag].nvmeDmaInfo.numOfNvmeBlock = tempNumOfNvmeBlock;
-		reqPoolPtr->reqPool[reqSlotTag].reqOpt.reserved0 = 0;
+		reqPoolPtr->reqPool[reqSlotTag].reqOpt.znsAppend = REQ_OPT_ZNS_APPEND_NONE;
 
 		PutToSliceReqQ(reqSlotTag);
 		if(ZnsAppendIsActive(cmdSlotTag))
 		{
-			reqPoolPtr->reqPool[reqSlotTag].reqOpt.reserved0 = 1;
+			reqPoolPtr->reqPool[reqSlotTag].reqOpt.znsAppend = REQ_OPT_ZNS_APPEND;
 			ZnsAppendNoteSlice(cmdSlotTag);
 		}
 
@@ -205,12 +205,12 @@ void ReqTransNvmeToSlice(unsigned int cmdSlotTag, unsigned int startLba, unsigne
 	reqPoolPtr->reqPool[reqSlotTag].nvmeDmaInfo.startIndex = nvmeDmaStartIndex;
 	reqPoolPtr->reqPool[reqSlotTag].nvmeDmaInfo.nvmeBlockOffset = nvmeBlockOffset;
 	reqPoolPtr->reqPool[reqSlotTag].nvmeDmaInfo.numOfNvmeBlock = tempNumOfNvmeBlock;
-	reqPoolPtr->reqPool[reqSlotTag].reqOpt.reserved0 = 0;
+	reqPoolPtr->reqPool[reqSlotTag].reqOpt.znsAppend = REQ_OPT_ZNS_APPEND_NONE;
 
 	PutToSliceReqQ(reqSlotTag);
 	if(ZnsAppendIsActive(cmdSlotTag))
 	{
-		reqPoolPtr->reqPool[reqSlotTag].reqOpt.reserved0 = 1;
+		reqPoolPtr->reqPool[reqSlotTag].reqOpt.znsAppend = REQ_OPT_ZNS_APPEND;
 		ZnsAppendNoteSlice(cmdSlotTag);
 	}
 }
@@ -704,7 +704,7 @@ void CheckDoneNvmeDmaReq()
 			if(rxDone)
 			{
 				unsigned int cmdSlotTag = reqPoolPtr->reqPool[reqSlotTag].nvmeCmdSlotTag;
-				unsigned int appendSlice = reqPoolPtr->reqPool[reqSlotTag].reqOpt.reserved0;
+				unsigned int appendSlice = reqPoolPtr->reqPool[reqSlotTag].reqOpt.znsAppend;
 				SelectiveGetFromNvmeDmaReqQ(reqSlotTag);
 				if(appendSlice)
 					ZnsAppendOnRxDmaDone(cmdSlotTag);
