@@ -153,7 +153,9 @@ typedef struct _REQ_OPTION{
 	unsigned int rowAddrDependencyCheck : 1;
 	unsigned int blockSpace : 1;
 	unsigned int znsAppend : 1;
-	unsigned int reserved0 : 23;
+	unsigned int hostNvmeRead : 1;
+	unsigned int nvmeCmdEpoch : 8;
+	unsigned int reserved0 : 14;
 } REQ_OPTION, *P_REQ_OPTION;
 
 

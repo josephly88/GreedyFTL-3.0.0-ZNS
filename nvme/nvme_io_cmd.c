@@ -399,6 +399,8 @@ void handle_nvme_io_cmd(NVME_COMMAND *nvmeCmd)
 	NVME_COMPLETION nvmeCPL;
 	unsigned int opc;
 
+	ZnsBeginNvmeCmd(nvmeCmd->cmdSlotTag);
+
 	nvmeIOCmd = (NVME_IO_COMMAND*)nvmeCmd->cmdDword;
 	/*	xil_printf("OPC = 0x%X\r\n", nvmeIOCmd->OPC);
 		xil_printf("PRP1[63:32] = 0x%X, PRP1[31:0] = 0x%X\r\n", nvmeIOCmd->PRP1[1], nvmeIOCmd->PRP1[0]);

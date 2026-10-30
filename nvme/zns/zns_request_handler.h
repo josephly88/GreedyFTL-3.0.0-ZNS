@@ -7,6 +7,14 @@ void InitZNS();
 
 void ZnsAbortNvmeIo(unsigned int cmdSlotTag, unsigned char sct, unsigned char sc, unsigned char dnr);
 
+void ZnsBeginNvmeCmd(unsigned int cmdSlotTag);
+
+unsigned char ZnsNvmeCmdEpoch(unsigned int cmdSlotTag);
+
+int ZnsMarkHostReadFailed(unsigned int cmdSlotTag, unsigned char epoch);
+
+int ZnsHostReadAutoCplOff(unsigned int cmdSlotTag, unsigned char epoch);
+
 unsigned short ZnsStatusWord(unsigned char sct, unsigned char sc, unsigned char dnr);
 
 void ZnsAppendArm(unsigned int cmdSlotTag, unsigned int assignedLba);
@@ -60,6 +68,8 @@ void incrementDataBufPointer(unsigned int zoneID);
 unsigned int CheckPartialSliceWriteBuf(unsigned int reqSlotTag, unsigned int zoneID);
 
 unsigned int CheckUnevictedSliceBuf(unsigned int reqSlotTag, unsigned int zoneID);
+
+void ZnsProgramFinishedDirtyBufs(unsigned int zoneID);
 
 void ZNS_ReqTransSliceToLowLevel(unsigned int reqSlotTag);
 

@@ -48,6 +48,7 @@ static unsigned short ZnsCloseOne(P_ZONE_MAP zoneMapPtr, unsigned int zoneId, un
 
     if(cur_state == EXPLICITLY_OPENED || cur_state == IMPLICITLY_OPENED)
     {
+        ZnsProgramFinishedDirtyBufs(zoneId);
         zoneMapPtr->zoneReg[zoneId].Zone_State = CLOSED;
         ZnsDropOpenCount(zoneMapPtr, cur_state);
         return 0;
