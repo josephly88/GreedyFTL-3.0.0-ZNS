@@ -239,6 +239,9 @@ void resetZoneReg(int ZoneID){
 }
 
 void resetWriteBufferReg(int BufferID){
+	if(BufferID < 0 || BufferID >= MAXIMUM_OPEN_ZONE_COUNT)
+		return;
+
 	zoneWriteBufMapPtr->zoneWriteBufReg[BufferID].ZoneID = -1;
 	zoneWriteBufMapPtr->zoneWriteBufReg[BufferID].curBufWriteIdx = -1;
 	zoneWriteBufMapPtr->zoneWriteBufReg[BufferID].dirtyBufIdx = -1;
@@ -349,20 +352,52 @@ void validBlockGroupFifo_Enqueue(unsigned int element){
 	validBlockGroupFifoPtr->Num++;
 }
 
+static void ZnsDumpBufferOwners(void)
+{
+	unsigned int zone;
+	unsigned int id;
+
+	xil_printf("BUF_STATE fifo_num=%d\r\n", zoneWriteBufMapPtr->Num);
+	for(zone = 0; zone < MAXIMUM_ACTIVE_ZONE_COUNT; zone++){
+		if(zoneMapPtr->zoneReg[zone].Buffer_ID != -1){
+			xil_printf("BUF_OWNER zone=%u state=%u buffer_id=%d wp=%u\r\n",
+				zone, (unsigned int)zoneMapPtr->zoneReg[zone].Zone_State,
+				zoneMapPtr->zoneReg[zone].Buffer_ID,
+				zoneMapPtr->zoneReg[zone].Write_Pointer);
+		}
+	}
+	for(id = 0; id < MAXIMUM_OPEN_ZONE_COUNT; id++){
+		xil_printf("BUF_MAP id=%u zone_id=%d\r\n",
+			id, zoneWriteBufMapPtr->zoneWriteBufReg[id].ZoneID);
+	}
+}
+
 unsigned int bufferIDFifo_Dequeue(){
 	int element = -1;
+	int fifoBefore = zoneWriteBufMapPtr->Num;
 
 	if(zoneWriteBufMapPtr->Num == 0){
 		int zone_idx;
+		int donorZone = -1;
 		for(zone_idx = 0; zone_idx < MAXIMUM_ACTIVE_ZONE_COUNT; zone_idx++){
 			if(zoneMapPtr->zoneReg[zone_idx].Zone_State == FULL && zoneMapPtr->zoneReg[zone_idx].Buffer_ID != -1){
 				element = zoneMapPtr->zoneReg[zone_idx].Buffer_ID;
+				donorZone = zone_idx;
 
 				ZNS_EvictAllDataBufEntry(zone_idx);
 				zoneMapPtr->zoneReg[zone_idx].Buffer_ID = -1;
 
 				break;
 			}		
+		}
+		if(element < 0){
+			xil_printf("BUF_ALLOC_FAIL fifo_num=%d\r\n", fifoBefore);
+			xil_printf("BUF_ALLOC_FAIL no free ID and no eligible FULL-zone donor\r\n");
+			ZnsDumpBufferOwners();
+		}
+		else{
+			xil_printf("BUF_ALLOC source=FULL_STEAL id=%d donor_zone=%d fifo_before=%d\r\n",
+				element, donorZone, fifoBefore);
 		}
 	}
 	else{
@@ -371,6 +406,8 @@ unsigned int bufferIDFifo_Dequeue(){
 			zoneWriteBufMapPtr->Head = (zoneWriteBufMapPtr->Head + 1) % MAXIMUM_OPEN_ZONE_COUNT;
 
 		zoneWriteBufMapPtr->Num--;
+		xil_printf("BUF_ALLOC source=FIFO id=%d fifo_before=%d fifo_after=%d\r\n",
+			element, fifoBefore, zoneWriteBufMapPtr->Num);
 	}
 
 	return element;

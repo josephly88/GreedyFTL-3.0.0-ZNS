@@ -51,18 +51,39 @@ static unsigned short ZnsCloseOne(P_ZONE_MAP zoneMapPtr, unsigned int zoneId, un
     if(cur_state == EXPLICITLY_OPENED || cur_state == IMPLICITLY_OPENED)
     {
         int bufferID;
+        int dirty;
+        int fifoBefore;
 
         ZnsProgramFinishedDirtyBufs(zoneId);
         SyncAllLowLevelReqDone();
 
         bufferID = zoneMapPtr->zoneReg[zoneId].Buffer_ID;
-        if(bufferID >= 0 && bufferID < MAXIMUM_OPEN_ZONE_COUNT
-            && ZnsZoneWriteRingDirty(zoneId) == 0
-            && zoneWriteBufMapPtr->Num < MAXIMUM_OPEN_ZONE_COUNT)
-        {
+        dirty = ZnsZoneWriteRingDirty(zoneId);
+        fifoBefore = zoneWriteBufMapPtr->Num;
+        if(bufferID < 0 || bufferID >= MAXIMUM_OPEN_ZONE_COUNT){
+            xil_printf("BUF_CLOSE_KEEP zone=%u id=%d reason=INVALID_ID fifo_before=%d dirty=%d state=%u\r\n",
+                zoneId, bufferID, fifoBefore, dirty, (unsigned int)cur_state);
+        }
+        else if(dirty < 0){
+            xil_printf("BUF_CLOSE_KEEP zone=%u id=%d reason=INVALID_RING fifo_before=%d dirty=%d state=%u\r\n",
+                zoneId, bufferID, fifoBefore, dirty, (unsigned int)cur_state);
+        }
+        else if(dirty != 0){
+            xil_printf("BUF_CLOSE_KEEP zone=%u id=%d reason=DIRTY fifo_before=%d dirty=%d state=%u\r\n",
+                zoneId, bufferID, fifoBefore, dirty, (unsigned int)cur_state);
+        }
+        else if(zoneWriteBufMapPtr->Num >= MAXIMUM_OPEN_ZONE_COUNT){
+            xil_printf("BUF_CLOSE_KEEP zone=%u id=%d reason=FIFO_FULL fifo_before=%d dirty=%d state=%u\r\n",
+                zoneId, bufferID, fifoBefore, dirty, (unsigned int)cur_state);
+        }
+        else{
+            xil_printf("BUF_CLOSE_RELEASE zone=%u id=%d fifo_before=%d dirty=%d state=%u\r\n",
+                zoneId, bufferID, fifoBefore, dirty, (unsigned int)cur_state);
             bufferIDFifo_Enqueue((unsigned int)bufferID);
             resetWriteBufferReg(bufferID);
             zoneMapPtr->zoneReg[zoneId].Buffer_ID = -1;
+            xil_printf("BUF_CLOSE_RELEASE_DONE zone=%u id=%d fifo_after=%d\r\n",
+                zoneId, bufferID, zoneWriteBufMapPtr->Num);
         }
 
         zoneMapPtr->zoneReg[zoneId].Zone_State = CLOSED;
@@ -222,9 +243,11 @@ void resetZone(unsigned int zoneId){
 
     // Clear all write buffers
     if(BUFFER_MODE == 0){
-        for(BufferIdx = 0; BufferIdx < DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE; BufferIdx++){
-            unsigned int dataBufEntry = ZNS_DATA_BUFFER_ENTRY_START + (zoneBufferID * DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE) + BufferIdx;
-            dataBufMapPtr->dataBuf[dataBufEntry].dirty = DATA_BUF_CLEAN;
+        if(zoneBufferID >= 0 && zoneBufferID < MAXIMUM_OPEN_ZONE_COUNT){
+            for(BufferIdx = 0; BufferIdx < DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE; BufferIdx++){
+                unsigned int dataBufEntry = ZNS_DATA_BUFFER_ENTRY_START + (zoneBufferID * DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE) + BufferIdx;
+                dataBufMapPtr->dataBuf[dataBufEntry].dirty = DATA_BUF_CLEAN;
+            }
         }
 
         if(NON_SHARE_MOD == 1){
@@ -272,7 +295,8 @@ void resetZone(unsigned int zoneId){
 
     validBlockGroupFifo_Enqueue(zoneReg.Phy_Block_Group_ID);
 
-    resetWriteBufferReg(zoneBufferID);
+    if(zoneBufferID >= 0 && zoneBufferID < MAXIMUM_OPEN_ZONE_COUNT)
+        resetWriteBufferReg(zoneBufferID);
     if(BUFFER_MODE == 0 && zoneReg.Buffer_ID != -1)
         bufferIDFifo_Enqueue(zoneReg.Buffer_ID);
 
