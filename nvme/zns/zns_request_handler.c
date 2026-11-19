@@ -329,6 +329,15 @@ unsigned int validBlockGroupFifo_Dequeue(){
 	return element;
 }
 
+/* Admission must fail the command when no block group remains. */
+static int validBlockGroupFifo_TryDequeue(void)
+{
+	if(validBlockGroupFifoPtr->Num == 0)
+		return -1;
+
+	return (int)validBlockGroupFifo_Dequeue();
+}
+
 void validBlockGroupFifo_Enqueue(unsigned int element){
 	if(validBlockGroupFifoPtr->Num >= validBlockGroupFifoPtr->Valid_Count)
 		assert(!"[Error] validBlockGroupFifoPtr is full [Error]");
@@ -349,8 +358,7 @@ unsigned int bufferIDFifo_Dequeue(){
 			if(zoneMapPtr->zoneReg[zone_idx].Zone_State == FULL && zoneMapPtr->zoneReg[zone_idx].Buffer_ID != -1){
 				element = zoneMapPtr->zoneReg[zone_idx].Buffer_ID;
 
-				unsigned int reqSlotTag = GetFromSliceReqQ();
-				ZNS_EvictAllDataBufEntry(zone_idx, reqSlotTag);
+				ZNS_EvictAllDataBufEntry(zone_idx);
 				zoneMapPtr->zoneReg[zone_idx].Buffer_ID = -1;
 
 				break;
@@ -478,9 +486,51 @@ int weighted_buffer_size(int zoneID) {
 	return 0;
 }
 
+static int ZnsBufferIdValid(int bufferID)
+{
+	/* zoneWriteBufReg[] is the buffer-ID table. Its bound is MAXIMUM_OPEN_ZONE_COUNT. */
+	int bufferCount = (int)(sizeof(zoneWriteBufMapPtr->zoneWriteBufReg)
+		/ sizeof(zoneWriteBufMapPtr->zoneWriteBufReg[0]));
+
+	return bufferID >= 0 && bufferID < bufferCount;
+}
+
+static void ZnsResourceFail(unsigned char *sct, unsigned char *sc, unsigned char *dnr)
+{
+	*sct = SCT_COMMAND_SPECIFIC_STATUS;
+	*sc = SC_TOO_MANY_OPEN_ZONES;
+	*dnr = 0;
+}
+
+/* Takes a buffer from the free FIFO. Returns -1 when none is available.
+   Buffer ID 0 is a successful acquisition. */
+static int ZnsTakeBufferId(int *fromFifo)
+{
+	int bufferID;
+
+	*fromFifo = 0;
+	if(BUFFER_MODE == 0){
+		bufferID = (int)bufferIDFifo_Dequeue();
+		if(!ZnsBufferIdValid(bufferID))
+			return -1;
+		*fromFifo = 1;
+		return bufferID;
+	}
+	if(BUFFER_MODE == 1)
+		return 0;
+
+	assert(!"[Error] Invalid Buffer Mode [Error]");
+	return -1;
+}
+
 int ZoneWriteCheck(unsigned int zoneID, unsigned int slba, unsigned int nlb,
 	unsigned char *sct, unsigned char *sc, unsigned char *dnr){
 	ZONE_REG zoneReg;
+	int bufferID, blockGroupID;
+	int tookBuffer = 0;
+	int tookBlockGroup = 0;
+	int openThisZone = 0;
+
 	zoneReg = zoneMapPtr->zoneReg[zoneID];
 
 	if(zoneReg.Zone_State == FULL){
@@ -529,75 +579,69 @@ int ZoneWriteCheck(unsigned int zoneID, unsigned int slba, unsigned int nlb,
 		return -1;
 	}
 
-	/* Closed is already active. Reopening it only consumes an open resource. */
-	if(zoneMapPtr->zoneReg[zoneID].Zone_State == CLOSED){
+	/* EMPTY and CLOSED are not open yet. Explicit and implicit opens already hold a slot. */
+	if(zoneReg.Zone_State == EMPTY || zoneReg.Zone_State == CLOSED){
 		if(zoneMapPtr->Num_Open_Zone >= MAXIMUM_OPEN_ZONE_COUNT){
 			xil_printf("Maximum Open Zone Count Reached: %d\r\n", MAXIMUM_OPEN_ZONE_COUNT);
 			*sct = SCT_COMMAND_SPECIFIC_STATUS;
-			*sc = SC_TOO_MANY_OPEN_ZONES;
+			if(zoneReg.Zone_State == EMPTY)
+				*sc = SC_TOO_MANY_ACTIVE_ZONES;
+			else
+				*sc = SC_TOO_MANY_OPEN_ZONES;
 			*dnr = 0;
 			return -1;
 		}
-		zoneMapPtr->zoneReg[zoneID].Zone_State = IMPLICITLY_OPENED;
-		zoneMapPtr->Num_Open_Zone++;
-
-		if(zoneMapPtr->zoneReg[zoneID].Buffer_ID == -1){
-			int bufferID;
-
-			if(BUFFER_MODE == 0){
-				bufferID = bufferIDFifo_Dequeue();
-				zoneWriteBufMapPtr->zoneWriteBufReg[bufferID].ZoneID = zoneID;
-			}
-			else if(BUFFER_MODE == 1){
-				bufferID = 0;
-			}
-			else{
-				assert(!"[Error] Invalid Buffer Mode [Error]");
-			}
-
-			zoneMapPtr->zoneReg[zoneID].Buffer_ID = bufferID;
-			if(zoneMapPtr->zoneReg[zoneID].Phy_Block_Group_ID == -1)
-				zoneMapPtr->zoneReg[zoneID].Phy_Block_Group_ID = validBlockGroupFifo_Dequeue();
-		}
+		openThisZone = 1;
 	}
 
-	if(zoneMapPtr->zoneReg[zoneID].Zone_State == EMPTY){
-		if(zoneMapPtr->Num_Open_Zone >= MAXIMUM_OPEN_ZONE_COUNT){
-			xil_printf("Maximum Open Zone Count Reached: %d\r\n", MAXIMUM_OPEN_ZONE_COUNT);
-			*sct = SCT_COMMAND_SPECIFIC_STATUS;
-			*sc = SC_TOO_MANY_ACTIVE_ZONES;
-			*dnr = 0;
+	bufferID = zoneReg.Buffer_ID;
+	blockGroupID = zoneReg.Phy_Block_Group_ID;
+
+	if(blockGroupID < 0){
+		blockGroupID = validBlockGroupFifo_TryDequeue();
+		if(blockGroupID < 0){
+			xil_printf("Zone [%d] block group allocation failed\r\n", zoneID);
+			ZnsResourceFail(sct, sc, dnr);
 			return -1;
 		}
-		zoneMapPtr->zoneReg[zoneID].Zone_State = IMPLICITLY_OPENED;
-		zoneMapPtr->Num_Open_Zone++;
+		tookBlockGroup = 1;
+	}
 
-		int bufferID;
-		
-		if(BUFFER_MODE == 0){
-			bufferID = bufferIDFifo_Dequeue();			
-			zoneWriteBufMapPtr->zoneWriteBufReg[bufferID].ZoneID = zoneID;
-		}
-		else if(BUFFER_MODE == 1){
-			bufferID = 0;
-		}		
-		else{
-			assert(!"[Error] Invalid Buffer Mode [Error]");
-		}
+	if(!ZnsBufferIdValid(bufferID)){
+		int bufferFromFifo = 0;
 
+		bufferID = ZnsTakeBufferId(&bufferFromFifo);
+		(void)bufferFromFifo;
+		if(!ZnsBufferIdValid(bufferID)){
+			xil_printf("Zone [%d] buffer allocation failed\r\n", zoneID);
+			if(tookBlockGroup)
+				validBlockGroupFifo_Enqueue((unsigned int)blockGroupID);
+			ZnsResourceFail(sct, sc, dnr);
+			return -1;
+		}
+		tookBuffer = 1;
+	}
+
+	if(tookBuffer){
 		zoneMapPtr->zoneReg[zoneID].Buffer_ID = bufferID;
-		zoneMapPtr->zoneReg[zoneID].Phy_Block_Group_ID = validBlockGroupFifo_Dequeue();
-		//xil_printf("Zone %d (Block Group %d) is implicitly opened\r\n", zoneMapPtr->zoneReg[zoneRegID].Zone_ID, zoneMapPtr->zoneReg[zoneRegID].Phy_Block_Group_ID);
+		if(BUFFER_MODE == 0)
+			zoneWriteBufMapPtr->zoneWriteBufReg[bufferID].ZoneID = zoneID;
+	}
+	if(tookBlockGroup)
+		zoneMapPtr->zoneReg[zoneID].Phy_Block_Group_ID = blockGroupID;
+
+	if(openThisZone){
+		zoneMapPtr->zoneReg[zoneID].Zone_State = IMPLICITLY_OPENED;
+		zoneMapPtr->Num_Open_Zone++;
 	}
 
-	// Increment the write pointer
 	zoneMapPtr->zoneReg[zoneID].Write_Pointer += nlb;
 	if(zoneMapPtr->zoneReg[zoneID].Write_Pointer >= zoneReg.SLBA + NVME_BLOCKS_PER_ZONE){
 		zoneMapPtr->zoneReg[zoneID].Zone_State = FULL;
 		zoneMapPtr->Num_Open_Zone--;
 	}
 
-    return zoneMapPtr->zoneReg[zoneID].Buffer_ID;
+	return 0;
 }
 
 int ZoneReadCheck(unsigned int zoneID, unsigned int slba, unsigned int nlb,
@@ -1063,7 +1107,7 @@ void ZNS_EvictDataBufEntry(unsigned int zoneID, unsigned int originReqSlotTag){
 	}
 }
 
-void ZNS_EvictAllDataBufEntry(unsigned int zoneID, unsigned int originReqSlotTag){
+void ZNS_EvictAllDataBufEntry(unsigned int zoneID){
 	unsigned int reqSlotTag, virtualSliceAddr, dataBufEntry;
 	int bufferID = zoneMapPtr->zoneReg[zoneID].Buffer_ID;
 	int bufEntryIdx = 0;
@@ -1078,7 +1122,6 @@ void ZNS_EvictAllDataBufEntry(unsigned int zoneID, unsigned int originReqSlotTag
 
 			reqPoolPtr->reqPool[reqSlotTag].reqType = REQ_TYPE_NAND;
 			reqPoolPtr->reqPool[reqSlotTag].reqCode = REQ_CODE_WRITE;
-			reqPoolPtr->reqPool[reqSlotTag].nvmeCmdSlotTag = reqPoolPtr->reqPool[originReqSlotTag].nvmeCmdSlotTag;
 			reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr = dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr;
 			reqPoolPtr->reqPool[reqSlotTag].reqOpt.dataBufFormat = REQ_OPT_DATA_BUF_ENTRY;
 			reqPoolPtr->reqPool[reqSlotTag].reqOpt.nandAddr = REQ_OPT_NAND_ADDR_VSA;

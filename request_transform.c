@@ -108,9 +108,20 @@ void ReqTransNvmeToSlice(unsigned int cmdSlotTag, unsigned int startLba, unsigne
 			}
 
 			if(cmdCode == IO_NVM_WRITE){
-				if(ZoneWriteCheck(zoneID, startLba, requestedNvmeBlock, &sct, &sc, &dnr) < 0){
+				P_ZONE_MAP admittedZoneMap;
+
+				if(ZoneWriteCheck(zoneID, startLba, requestedNvmeBlock, &sct, &sc, &dnr) != 0){
 					ZnsAbortNvmeIo(cmdSlotTag, sct, sc, dnr);
 					return;
+				}
+				admittedZoneMap = (P_ZONE_MAP)ZONE_MAP_ADDR;
+				if(admittedZoneMap->zoneReg[zoneID].Buffer_ID < 0){
+					/* Success already committed the pointer. Completing this command
+					   as a failure would make the host retry the old SLBA. */
+					xil_printf("Zone [%d] admitted without a buffer\r\n", zoneID);
+					assert(!"[Error] Zone write admitted without a buffer [Error]");
+					for(;;)
+						;
 				}
 				reqCode = REQ_CODE_ZONE_WRITE;
 			}

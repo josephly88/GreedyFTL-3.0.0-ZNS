@@ -55,6 +55,7 @@ int wrr_select_zone_probability();
 
 int weighted_buffer_size(int zoneID);
 
+/* 0: admitted. -1: rejected, with sct/sc/dnr set. Does not return Buffer_ID. */
 int ZoneWriteCheck(unsigned int zoneID, unsigned int slba, unsigned int nlb,
 	unsigned char *sct, unsigned char *sc, unsigned char *dnr);
 
@@ -77,7 +78,7 @@ unsigned int ZNS_AllocateWriteDataBuf(unsigned int zoneID, unsigned int reqSlotT
 
 void ZNS_EvictDataBufEntry(unsigned int zoneID, unsigned int originReqSlotTag);
 
-void ZNS_EvictAllDataBufEntry(unsigned int zoneID, unsigned int originReqSlotTag);
+void ZNS_EvictAllDataBufEntry(unsigned int zoneID);
 
 void ZNS_DataReadFromNand(unsigned int zoneID, unsigned int originReqSlotTag);
 
