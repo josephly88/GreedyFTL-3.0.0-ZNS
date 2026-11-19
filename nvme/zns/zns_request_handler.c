@@ -889,6 +889,31 @@ void ZnsProgramFinishedDirtyBufs(unsigned int zoneID)
 		SyncAllLowLevelReqDone();
 }
 
+int ZnsZoneWriteRingDirty(unsigned int zoneID)
+{
+	unsigned int i;
+	int bufferID;
+
+	if(zoneID >= MAXIMUM_ACTIVE_ZONE_COUNT)
+		return -1;
+
+	bufferID = zoneMapPtr->zoneReg[zoneID].Buffer_ID;
+	if(bufferID < 0 || bufferID >= MAXIMUM_OPEN_ZONE_COUNT)
+		return -1;
+
+	for(i = 0; i < DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE; i++)
+	{
+		unsigned int dataBufEntry;
+
+		dataBufEntry = ZNS_DATA_BUFFER_ENTRY_START
+			+ (bufferID * DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE) + i;
+		if(dataBufMapPtr->dataBuf[dataBufEntry].dirty == DATA_BUF_DIRTY)
+			return 1;
+	}
+
+	return 0;
+}
+
 static void ZnsAbortSliceReq(unsigned int reqSlotTag, unsigned char sct, unsigned char sc, unsigned char dnr)
 {
 	ZnsAbortNvmeIo(reqPoolPtr->reqPool[reqSlotTag].nvmeCmdSlotTag, sct, sc, dnr);

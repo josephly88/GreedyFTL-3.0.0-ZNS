@@ -72,6 +72,8 @@ unsigned int CheckUnevictedSliceBuf(unsigned int reqSlotTag, unsigned int zoneID
 
 void ZnsProgramFinishedDirtyBufs(unsigned int zoneID);
 
+int ZnsZoneWriteRingDirty(unsigned int zoneID);
+
 void ZNS_ReqTransSliceToLowLevel(unsigned int reqSlotTag);
 
 unsigned int ZNS_AllocateWriteDataBuf(unsigned int zoneID, unsigned int reqSlotTag);

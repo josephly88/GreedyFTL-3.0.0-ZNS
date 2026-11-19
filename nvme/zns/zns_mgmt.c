@@ -5,6 +5,8 @@
 
 #include "xil_printf.h"
 
+extern P_ZONE_WRITE_BUFFER_MAP zoneWriteBufMapPtr;
+
 static unsigned short ZnsInvalidField(void)
 {
     return ZnsStatusWord(SCT_GENERIC_COMMAND_STATUS, SC_INVALID_FIELD_IN_COMMAND, 1);
@@ -48,7 +50,21 @@ static unsigned short ZnsCloseOne(P_ZONE_MAP zoneMapPtr, unsigned int zoneId, un
 
     if(cur_state == EXPLICITLY_OPENED || cur_state == IMPLICITLY_OPENED)
     {
+        int bufferID;
+
         ZnsProgramFinishedDirtyBufs(zoneId);
+        SyncAllLowLevelReqDone();
+
+        bufferID = zoneMapPtr->zoneReg[zoneId].Buffer_ID;
+        if(bufferID >= 0 && bufferID < MAXIMUM_OPEN_ZONE_COUNT
+            && ZnsZoneWriteRingDirty(zoneId) == 0
+            && zoneWriteBufMapPtr->Num < MAXIMUM_OPEN_ZONE_COUNT)
+        {
+            bufferIDFifo_Enqueue((unsigned int)bufferID);
+            resetWriteBufferReg(bufferID);
+            zoneMapPtr->zoneReg[zoneId].Buffer_ID = -1;
+        }
+
         zoneMapPtr->zoneReg[zoneId].Zone_State = CLOSED;
         ZnsDropOpenCount(zoneMapPtr, cur_state);
         return 0;
