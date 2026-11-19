@@ -56,21 +56,15 @@
 //   - First draft
 //////////////////////////////////////////////////////////////////////////////////
 
-/* 1 = UART heartbeat + lifecycle prints. 0 = quiet.
-   Diagnostic counters still update. ASSERT and error prints stay on. */
-#define FW_LOG_ENABLE	0
-
 #include "xil_printf.h"
 #include "debug.h"
 #include "io_access.h"
-#include "xtime_l.h"
 
 #include "nvme.h"
 #include "host_lld.h"
 #include "nvme_main.h"
 #include "nvme_admin_cmd.h"
 #include "nvme_io_cmd.h"
-#include "fw_trace.h"
 
 #include "../memory_map.h"
 
@@ -78,27 +72,19 @@
 #include "zns/zns_request_handler.h"
 
 volatile NVME_CONTEXT g_nvmeTask;
-unsigned int g_fwLogEnable = FW_LOG_ENABLE;
 
 void nvme_main()
 {
 	unsigned int exeLlr;
 	unsigned int rstCnt = 0;
-	unsigned int hbCnt = 0;
-	XTime hbLast;
 
-	if(g_fwLogEnable)
-		xil_printf("!!! Wait until FTL reset complete !!! \r\n");
+
+	xil_printf("!!! Wait until FTL reset complete !!! \r\n");
 
 	InitFTL();
 
-	if(g_fwLogEnable)
-	{
-		xil_printf("\r\nFTL reset complete!!! \r\n");
-		xil_printf("Turn on the host PC \r\n");
-		xil_printf("UART heartbeat 1 Hz (HB) enabled\r\n");
-	}
-	XTime_GetTime(&hbLast);
+	xil_printf("\r\nFTL reset complete!!! \r\n");
+	xil_printf("Turn on the host PC \r\n");
 
 	while(1)
 	{
@@ -113,8 +99,7 @@ void nvme_main()
 				set_nvme_admin_queue(1, 1, 1);
 				set_nvme_csts_rdy(1);
 				g_nvmeTask.status = NVME_TASK_RUNNING;
-				if(g_fwLogEnable)
-					xil_printf("\r\nNVMe ready!!!\r\n");
+				xil_printf("\r\nNVMe ready!!!\r\n");
 			}
 		}
 		else if(g_nvmeTask.status == NVME_TASK_RUNNING)
@@ -127,7 +112,6 @@ void nvme_main()
 			if(cmdValid == 1)
 			{
 				rstCnt = 0;
-				FwTraceOnCmd(nvmeCmd.qID, nvmeCmd.cmdSeqNum, nvmeCmd.cmdDword[0] & 0xFF);
 				if(nvmeCmd.qID == 0)
 				{
 					handle_nvme_admin_cmd(&nvmeCmd);
@@ -163,8 +147,7 @@ void nvme_main()
 				//flush grown bad block info
 				UpdateBadBlockTableForGrownBadBlock(RESERVED_DATA_BUFFER_BASE_ADDR);
 
-				if(g_fwLogEnable)
-					xil_printf("\r\nNVMe shutdown!!!\r\n");
+				xil_printf("\r\nNVMe shutdown!!!\r\n");
 			}
 		}
 		else if(g_nvmeTask.status == NVME_TASK_WAIT_RESET)
@@ -177,8 +160,7 @@ void nvme_main()
 				set_nvme_csts_shst(0);
 				set_nvme_csts_rdy(0);
 				g_nvmeTask.status = NVME_TASK_IDLE;
-				if(g_fwLogEnable)
-					xil_printf("\r\nNVMe disable!!!\r\n");
+				xil_printf("\r\nNVMe disable!!!\r\n");
 			}
 		}
 		else if(g_nvmeTask.status == NVME_TASK_RESET)
@@ -193,11 +175,8 @@ void nvme_main()
 			if (rstCnt>= 5){
 				pcie_async_reset(rstCnt);
 				rstCnt = 0;
-				if(g_fwLogEnable)
-				{
-					xil_printf("\r\nPcie iink disable!!!\r\n");
-					xil_printf("Wait few minute or reconnect the PCIe cable\r\n");
-				}
+				xil_printf("\r\nPcie iink disable!!!\r\n");
+				xil_printf("Wait few minute or reconnect the PCIe cable\r\n");
 			}
 			else
 				rstCnt++;
@@ -208,29 +187,13 @@ void nvme_main()
 			set_nvme_csts_rdy(0);
 			g_nvmeTask.status = NVME_TASK_IDLE;
 
-			if(g_fwLogEnable)
-				xil_printf("\r\nNVMe reset!!!\r\n");
+			xil_printf("\r\nNVMe reset!!!\r\n");
 		}
 
 		if(exeLlr && ((nvmeDmaReqQ.headReq != REQ_SLOT_TAG_NONE) || notCompletedNandReqCnt || blockedReqCnt))
 		{
 			CheckDoneNvmeDmaReq();
 			SchedulingNandReq();
-		}
-
-
-		if(g_fwLogEnable){
-			XTime hbNow;
-
-			XTime_GetTime(&hbNow);
-			if((hbNow - hbLast) >= COUNTS_PER_SECOND)
-			{
-				hbLast = hbNow;
-				hbCnt++;
-				FwTracePrint1Hz(hbCnt, g_nvmeTask.status,
-					nvmeDmaReqQ.reqCnt, notCompletedNandReqCnt, blockedReqCnt,
-					ZnsAppendLiveCount());
-			}
 		}
 	}
 }

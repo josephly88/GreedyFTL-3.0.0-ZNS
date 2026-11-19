@@ -58,7 +58,6 @@
 
 #include "nvme.h"
 #include "host_lld.h"
-#include "fw_trace.h"
 
 extern NVME_CONTEXT g_nvmeTask;
 HOST_DMA_STATUS g_hostDmaStatus;
@@ -92,13 +91,14 @@ void dev_irq_handler()
 
 	devReg.dword = IO_READ32(DEV_IRQ_STATUS_REG_ADDR);
 	IO_WRITE32(DEV_IRQ_CLEAR_REG_ADDR, devReg.dword);
+//	xil_printf("IRQ: 0x%X\r\n", devReg.dword);
 
 	if(devReg.pcieLink == 1)
 	{
 		PCIE_STATUS_REG pcieReg;
 		pcieReg.dword = IO_READ32(PCIE_STATUS_REG_ADDR);
-		if(g_fwLogEnable)
-			xil_printf("PCIe Link: %d\r\n", pcieReg.pcieLinkUp);
+		xil_printf("PCIe Link: %d\r\n", pcieReg.pcieLinkUp);
+		// set_link_width(0) //you can choose pcie lane width 0,2,4,8 mini board -> maximum 4, cosmos+ board -> maximum 8
 		if(pcieReg.pcieLinkUp == 0)
 			g_nvmeTask.status = NVME_TASK_RESET;
 	}
@@ -107,40 +107,35 @@ void dev_irq_handler()
 	{
 		PCIE_FUNC_REG pcieReg;
 		pcieReg.dword = IO_READ32(PCIE_FUNC_REG_ADDR);
-		if(g_fwLogEnable)
-			xil_printf("PCIe Bus Master: %d\r\n", pcieReg.busMaster);
+		xil_printf("PCIe Bus Master: %d\r\n", pcieReg.busMaster);
 	}
 
 	if(devReg.pcieIrq == 1)
 	{
 		PCIE_FUNC_REG pcieReg;
 		pcieReg.dword = IO_READ32(PCIE_FUNC_REG_ADDR);
-		if(g_fwLogEnable)
-			xil_printf("PCIe IRQ Disable: %d\r\n", pcieReg.irqDisable);
+		xil_printf("PCIe IRQ Disable: %d\r\n", pcieReg.irqDisable);
 	}
 
 	if(devReg.pcieMsi == 1)
 	{
 		PCIE_FUNC_REG pcieReg;
 		pcieReg.dword = IO_READ32(PCIE_FUNC_REG_ADDR);
-		if(g_fwLogEnable)
-			xil_printf("PCIe MSI Enable: %d, 0x%x\r\n", pcieReg.msiEnable, pcieReg.msiVecNum);
+		xil_printf("PCIe MSI Enable: %d, 0x%x\r\n", pcieReg.msiEnable, pcieReg.msiVecNum);
 	}
 
 	if(devReg.pcieMsix == 1)
 	{
 		PCIE_FUNC_REG pcieReg;
 		pcieReg.dword = IO_READ32(PCIE_FUNC_REG_ADDR);
-		if(g_fwLogEnable)
-			xil_printf("PCIe MSI-X Enable: %d\r\n", pcieReg.msixEnable);
+		xil_printf("PCIe MSI-X Enable: %d\r\n", pcieReg.msixEnable);
 	}
 
 	if(devReg.nvmeCcEn == 1)
 	{
 		NVME_STATUS_REG nvmeReg;
 		nvmeReg.dword = IO_READ32(NVME_STATUS_REG_ADDR);
-		if(g_fwLogEnable)
-			xil_printf("NVME CC.EN: %d\r\n", nvmeReg.ccEn);
+		xil_printf("NVME CC.EN: %d\r\n", nvmeReg.ccEn);
 
 		if(nvmeReg.ccEn == 1)
 			g_nvmeTask.status = NVME_TASK_WAIT_CC_EN;
@@ -152,8 +147,7 @@ void dev_irq_handler()
 	{
 		NVME_STATUS_REG nvmeReg;
 		nvmeReg.dword = IO_READ32(NVME_STATUS_REG_ADDR);
-		if(g_fwLogEnable)
-			xil_printf("NVME CC.SHN: %d\r\n", nvmeReg.ccShn);
+		xil_printf("NVME CC.SHN: %d\r\n", nvmeReg.ccShn);
 		if(nvmeReg.ccShn == 1)
 			g_nvmeTask.status = NVME_TASK_SHUTDOWN;
 	}
@@ -256,6 +250,7 @@ unsigned int get_nvme_cmd(unsigned short *qID, unsigned short *cmdSlotTag, unsig
 		*qID = nvmeReg.qID;
 		*cmdSlotTag = nvmeReg.cmdSlotTag;
 		*cmdSeqNum = nvmeReg.cmdSeqNum;
+		//xil_printf("nvmeReg.cmdSlotTag = 0x%X\r\n", nvmeReg.cmdSlotTag);
 
 		addr = NVME_CMD_SRAM_ADDR + (nvmeReg.cmdSlotTag * 64);
 		for(idx = 0; idx < 16; idx++)
@@ -277,7 +272,6 @@ void set_auto_nvme_cpl(unsigned int cmdSlotTag, unsigned int specific, unsigned 
 	//IO_WRITE32(NVME_CPL_FIFO_REG_ADDR, nvmeReg.dword[0]);
 	IO_WRITE32((NVME_CPL_FIFO_REG_ADDR + 4), nvmeReg.dword[1]);
 	IO_WRITE32((NVME_CPL_FIFO_REG_ADDR + 8), nvmeReg.dword[2]);
-	FwTraceOnFwCpl();
 }
 
 void set_nvme_slot_release(unsigned int cmdSlotTag)
@@ -305,7 +299,6 @@ void set_nvme_cpl(unsigned int sqId, unsigned int cid, unsigned int specific, un
 	IO_WRITE32(NVME_CPL_FIFO_REG_ADDR, nvmeReg.dword[0]);
 	IO_WRITE32((NVME_CPL_FIFO_REG_ADDR + 4), nvmeReg.dword[1]);
 	IO_WRITE32((NVME_CPL_FIFO_REG_ADDR + 8), nvmeReg.dword[2]);
-	FwTraceOnFwCpl();
 }
 
 void set_io_sq(unsigned int ioSqIdx, unsigned int valid, unsigned int cqVector, unsigned int qSzie, unsigned int pcieBaseAddrL, unsigned int pcieBaseAddrH)
@@ -425,9 +418,6 @@ void set_auto_tx_dma(unsigned int cmdSlotTag, unsigned int cmd4KBOffset, unsigne
 	IO_WRITE32((HOST_DMA_CMD_FIFO_REG_ADDR + 12), hostDmaReg.dword[3]);
 	IO_WRITE32((HOST_DMA_CMD_FIFO_REG_ADDR + 16), hostDmaReg.dword[4]);//slot_modified
 
-	if(autoCompletion)
-		FwTraceOnHwAutoCpl();
-
 	tempTail = g_hostDmaStatus.fifoTail.autoDmaTx++;
 	if(tempTail > g_hostDmaStatus.fifoTail.autoDmaTx)
 		g_hostDmaAssistStatus.autoDmaTxOverFlowCnt++;
@@ -460,9 +450,6 @@ void set_auto_rx_dma(unsigned int cmdSlotTag, unsigned int cmd4KBOffset, unsigne
 	//IO_WRITE32((HOST_DMA_CMD_FIFO_REG_ADDR + 8), hostDmaReg.dword[2]);
 	IO_WRITE32((HOST_DMA_CMD_FIFO_REG_ADDR + 12), hostDmaReg.dword[3]);
 	IO_WRITE32((HOST_DMA_CMD_FIFO_REG_ADDR + 16), hostDmaReg.dword[4]);//slot_modified
-
-	if(autoCompletion)
-		FwTraceOnHwAutoCpl();
 
 	tempTail = g_hostDmaStatus.fifoTail.autoDmaRx++;
 	if(tempTail > g_hostDmaStatus.fifoTail.autoDmaRx)
@@ -505,6 +492,8 @@ void check_auto_rx_dma_done()
 
 unsigned int check_auto_tx_dma_partial_done(unsigned int tailIndex, unsigned int tailAssistIndex)
 {
+	//xil_printf("check_auto_tx_dma_partial_done \r\n");
+
 	g_hostDmaStatus.fifoHead.dword = IO_READ32(HOST_DMA_FIFO_CNT_REG_ADDR);
 
 	if(g_hostDmaStatus.fifoHead.autoDmaTx == g_hostDmaStatus.fifoTail.autoDmaTx)
@@ -546,6 +535,8 @@ unsigned int check_auto_tx_dma_partial_done(unsigned int tailIndex, unsigned int
 
 unsigned int check_auto_rx_dma_partial_done(unsigned int tailIndex, unsigned int tailAssistIndex)
 {
+	//xil_printf("check_auto_rx_dma_partial_done \r\n");
+
 	g_hostDmaStatus.fifoHead.dword = IO_READ32(HOST_DMA_FIFO_CNT_REG_ADDR);
 
 	if(g_hostDmaStatus.fifoHead.autoDmaRx == g_hostDmaStatus.fifoTail.autoDmaRx)

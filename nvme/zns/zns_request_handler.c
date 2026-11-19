@@ -5,7 +5,6 @@
 #include <assert.h>
 #include "../nvme.h"
 #include "../host_lld.h"
-#include "../fw_trace.h"
 #include "../../memory_map.h"
 #include "../../ftl_config.h"
 
@@ -65,7 +64,6 @@ void ZnsAppendArm(unsigned int cmdSlotTag, unsigned int assignedLba)
 	znsAppendCpl[cmdSlotTag].assignedLba = assignedLba;
 	znsAppendCpl[cmdSlotTag].slicesLeft = 0;
 	znsAppendCpl[cmdSlotTag].valid = 1;
-	FwTraceOnAppendArm();
 }
 
 void ZnsAppendNoteSlice(unsigned int cmdSlotTag)
@@ -100,22 +98,7 @@ void ZnsAppendOnRxDmaDone(unsigned int cmdSlotTag)
 
 	assignedLba = znsAppendCpl[cmdSlotTag].assignedLba;
 	znsAppendCpl[cmdSlotTag].valid = 0;
-	FwTraceOnAppendCpl();
 	set_auto_nvme_cpl(cmdSlotTag, assignedLba, 0);
-}
-
-unsigned int ZnsAppendLiveCount(void)
-{
-	unsigned int i;
-	unsigned int live;
-
-	live = 0;
-	for(i = 0; i < ZNS_APPEND_SLOT_COUNT; i++)
-	{
-		if(znsAppendCpl[i].valid)
-			live++;
-	}
-	return live;
 }
 
 unsigned short ZnsStatusWord(unsigned char sct, unsigned char sc, unsigned char dnr)
@@ -289,6 +272,7 @@ void eliminateBadBlockGroups(){
 			int BG = BG_row * (64/NUM_OF_DIE_PER_ZONE) + BG_column;
 
 			validBlockGroupFifoPtr->FIFO_LIST[BG] = -1;
+			//xil_printf("Bad Block %d is found in Block Group %d\r\n", badblk, BG);
 		}
 	}
 
@@ -603,6 +587,7 @@ int ZoneWriteCheck(unsigned int zoneID, unsigned int slba, unsigned int nlb,
 
 		zoneMapPtr->zoneReg[zoneID].Buffer_ID = bufferID;
 		zoneMapPtr->zoneReg[zoneID].Phy_Block_Group_ID = validBlockGroupFifo_Dequeue();
+		//xil_printf("Zone %d (Block Group %d) is implicitly opened\r\n", zoneMapPtr->zoneReg[zoneRegID].Zone_ID, zoneMapPtr->zoneReg[zoneRegID].Phy_Block_Group_ID);
 	}
 
 	// Increment the write pointer
@@ -959,8 +944,10 @@ void ZNS_ReqTransSliceToLowLevel(unsigned int reqSlotTag){
 
 unsigned int ZNS_AllocateWriteDataBuf(unsigned int zoneID, unsigned int reqSlotTag){
 
-	unsigned int dataBufEntry;
+    unsigned int dataBufEntry;
 
+	//xil_printf("Catch a ZNS Request LogicalSliceAddr : 0x%x, zone ID : %d \r\n", reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr, zoneID);
+	
 	// In case write smaller than a slice which can fit the last buffer
 	if(BUFFER_MODE == 0){
 		incrementDataBufPointer(zoneID);
@@ -999,6 +986,19 @@ void ZNS_EvictDataBufEntry(unsigned int zoneID, unsigned int originReqSlotTag){
 				zoneWriteBufMapPtr->zoneWriteBufReg[bufferID].dirtyBufIdx = (dirtyIdx + 1) % DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE;
 				wrrPtr->buffer_count[evict_zoneID] -= 1;
 				wrrPtr->total_buffer_count -= 1;	
+
+				/*
+				xil_printf("[DEBUG] evict_zone=%d weight=%d bufferID=%d dirtyIdx=%d bufCount=%d totalBuf=%d totalWeight=%d listLen=%d\r\n",
+					evict_zoneID,
+					wrr_get_zone_weight(evict_zoneID),
+					bufferID,
+					dirtyIdx,
+					wrrPtr->buffer_count[evict_zoneID],
+					wrrPtr->total_buffer_count,
+					wrrPtr->total_weight,
+					wrrPtr->listLength);
+				*/
+					
 
 				if(wrrPtr->buffer_count[evict_zoneID] == 0){
 					wrr_remove_zone(evict_zoneID);
@@ -1072,6 +1072,7 @@ void ZNS_EvictAllDataBufEntry(unsigned int zoneID, unsigned int originReqSlotTag
 		dataBufEntry = ZNS_DATA_BUFFER_ENTRY_START + (bufferID * DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE) + bufEntryIdx;
 		if(dataBufMapPtr->dataBuf[dataBufEntry].dirty == DATA_BUF_DIRTY)
 		{
+			//xil_printf("Evict DataBufEntry : %d, SliceAddr : 0x%x\r\n", dataBufEntry, dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr);
 			reqSlotTag = GetFromFreeReqQ();
 			virtualSliceAddr = ZNS_AddrTransWrite(dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr);
 
