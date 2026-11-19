@@ -121,8 +121,6 @@ unsigned int get_num_of_queue(unsigned int dword11)
 	ADMIN_SET_FEATURES_NUMBER_OF_QUEUES_COMPLETE allocated;
 
 	requested.dword = dword11;
-	xil_printf("Number of IO Submission Queues Requested (NSQR, zero-based): 0x%04X\r\n", requested.NSQR);
-	xil_printf("Number of IO Completion Queues Requested (NCQR, zero-based): 0x%04X\r\n", requested.NCQR);
 
 	//IO submission queue allocating
 	if(requested.NSQR >= MAX_NUM_OF_IO_SQ)
@@ -140,9 +138,6 @@ unsigned int get_num_of_queue(unsigned int dword11)
 		g_nvmeTask.numOfIOCompletionQueuesAllocated = requested.NCQR + 1;//zero-based -> non zero-based
 
 	allocated.NCQA = g_nvmeTask.numOfIOCompletionQueuesAllocated - 1;//non zero-based -> zero-based
-
-	xil_printf("Number of IO Submission Queues Allocated (NSQA, zero-based): 0x%04X\r\n", allocated.NSQA);
-	xil_printf("Number of IO Completion Queues Allocated (NCQA, zero-based): 0x%04X\r\n", allocated.NCQA);
 
 	return allocated.dword;
 }
@@ -182,7 +177,6 @@ void handle_set_features(NVME_ADMIN_COMMAND *nvmeAdminCmd, NVME_COMPLETION *nvme
 		}
 		case VOLATILE_WRITE_CACHE:
 		{
-			xil_printf("Set VWC: %X\r\n", nvmeAdminCmd->dword11);
 			g_nvmeTask.cacheEn = (nvmeAdminCmd->dword11 & 0x1);
 			nvmeCPL->dword[0] = 0x0;
 			nvmeCPL->specific = 0x0;
@@ -207,7 +201,6 @@ void handle_set_features(NVME_ADMIN_COMMAND *nvmeAdminCmd, NVME_COMPLETION *nvme
 			break;
 		}
 	}
-	xil_printf("Set Feature FID:%X\r\n", features.FID);
 }
 
 void handle_get_features(NVME_ADMIN_COMMAND *nvmeAdminCmd, NVME_COMPLETION *nvmeCPL)
@@ -237,8 +230,6 @@ void handle_get_features(NVME_ADMIN_COMMAND *nvmeAdminCmd, NVME_COMPLETION *nvme
 		}
 		case VOLATILE_WRITE_CACHE:
 		{
-			
-			xil_printf("Get VWC: %X\r\n", g_nvmeTask.cacheEn);
 			nvmeCPL->dword[0] = 0x0;
 			nvmeCPL->specific = g_nvmeTask.cacheEn;
 			break;
@@ -268,7 +259,6 @@ void handle_get_features(NVME_ADMIN_COMMAND *nvmeAdminCmd, NVME_COMPLETION *nvme
 			break;
 		}
 	}
-	xil_printf("Get Feature FID:%X\r\n", features.FID);
 }
 
 void handle_create_io_sq(NVME_ADMIN_COMMAND *nvmeAdminCmd, NVME_COMPLETION *nvmeCPL)
@@ -280,11 +270,6 @@ void handle_create_io_sq(NVME_ADMIN_COMMAND *nvmeAdminCmd, NVME_COMPLETION *nvme
 
 	sqInfo10.dword = nvmeAdminCmd->dword10;
 	sqInfo11.dword = nvmeAdminCmd->dword11;
-
-	xil_printf("create sq: 0x%08X, 0x%08X\r\n", sqInfo11.dword, sqInfo10.dword);
-	/*xil_printf("QID : 0x%08X, QSIZE : 0x%08X\r\n", sqInfo10.QID, sqInfo10.QSIZE);
-	xil_printf("PC : 0x%08X, QPRIO : 0x%08X, CQID : 0x%08X\r\n", sqInfo11.PC, sqInfo11.QPRIO,sqInfo11.CQID);
-	xil_printf("pcieBaseAddrL : 0x%08X, pcieBaseAddrH : 0x%08X\r\n", ioSqStatus->pcieBaseAddrL, ioSqStatus->pcieBaseAddrH);*/
 
 	ASSERT((nvmeAdminCmd->PRP1[0] & 0x3) == 0 && nvmeAdminCmd->PRP1[1] < 0x10000);
 	ASSERT(0 < sqInfo10.QID && sqInfo10.QID <= 8 && sqInfo10.QSIZE < 0x100 && 0 < sqInfo11.CQID && sqInfo11.CQID <= 8);
@@ -313,8 +298,6 @@ void handle_delete_io_sq(NVME_ADMIN_COMMAND *nvmeAdminCmd, NVME_COMPLETION *nvme
 
 	sqInfo10.dword = nvmeAdminCmd->dword10;
 
-	xil_printf("delete sq: 0x%08X\r\n", sqInfo10.dword);
-
 	ioSqIdx = (unsigned int)sqInfo10.QID - 1;
 	ioSqStatus = g_nvmeTask.ioSqInfo + ioSqIdx;
 
@@ -340,8 +323,6 @@ void handle_create_io_cq(NVME_ADMIN_COMMAND *nvmeAdminCmd, NVME_COMPLETION *nvme
 
 	cqInfo10.dword = nvmeAdminCmd->dword10;
 	cqInfo11.dword = nvmeAdminCmd->dword11;
-
-	xil_printf("create cq: 0x%08X, 0x%08X\r\n", cqInfo11.dword, cqInfo10.dword);
 
 	ASSERT(((nvmeAdminCmd->PRP1[0] & 0x3) == 0) && (nvmeAdminCmd->PRP1[1] < 0x10000));
 	ASSERT(cqInfo11.IV < 8 && cqInfo10.QSIZE < 0x100 && 0 < cqInfo10.QID && cqInfo10.QID <= 8);
@@ -369,8 +350,6 @@ void handle_delete_io_cq(NVME_ADMIN_COMMAND *nvmeAdminCmd, NVME_COMPLETION *nvme
 	unsigned int ioCqIdx;
 
 	cqInfo10.dword = nvmeAdminCmd->dword10;
-
-	xil_printf("delete cq: 0x%08X\r\n", cqInfo10.dword);
 
 	ioCqIdx = (unsigned int)cqInfo10.QID - 1;
 	ioCqStatus = g_nvmeTask.ioCqInfo + ioCqIdx;
@@ -553,22 +532,6 @@ void handle_nvme_admin_cmd(NVME_COMMAND *nvmeCmd)
 	needCpl = 1;
 	needSlotRelease = 0;
 
-	
-	/*	xil_printf("OPC = 0x%X\r\n", nvmeAdminCmd->OPC);
-		xil_printf("FUSE = 0x%X\r\n", nvmeAdminCmd->FUSE);
-		xil_printf("PSDT = 0x%X\r\n", nvmeAdminCmd->PSDT);
-		xil_printf("CID = 0x%X\r\n",nvmeAdminCmd->CID);
-		xil_printf("NSID = 0x%X\r\n", nvmeAdminCmd->NSID);
-		xil_printf("MPTR[1] = 0x%X, MPTR[0] = 0x%X\r\n", nvmeAdminCmd->MPTR[1], nvmeAdminCmd->MPTR[0]);
-		xil_printf("PRP1[63:32] = 0x%X, PRP1[31:0] = 0x%X\r\n", nvmeAdminCmd->PRP1[1], nvmeAdminCmd->PRP1[0]);
-		xil_printf("PRP2[63:32] = 0x%X, PRP2[31:0] = 0x%X\r\n", nvmeAdminCmd->PRP2[1], nvmeAdminCmd->PRP2[0]);
-		xil_printf("dword10 = 0x%X\r\n", nvmeAdminCmd->dword10);
-		xil_printf("dword11 = 0x%X\r\n", nvmeAdminCmd->dword11);
-		xil_printf("dword12 = 0x%X\r\n", nvmeAdminCmd->dword12);
-		xil_printf("dword13 = 0x%X\r\n", nvmeAdminCmd->dword13);
-		xil_printf("dword14 = 0x%X\r\n", nvmeAdminCmd->dword14);
-		xil_printf("dword15 = 0x%X\r\n", nvmeAdminCmd->dword15);*/
-
 	switch(opc)
 	{
 		case ADMIN_SET_FEATURES:
@@ -654,9 +617,5 @@ void handle_nvme_admin_cmd(NVME_COMMAND *nvmeCmd)
 		set_nvme_slot_release(nvmeCmd->cmdSlotTag);
 	else
 		set_nvme_cpl(nvmeCmd->qID, nvmeAdminCmd->CID, nvmeCPL.specific, nvmeCPL.statusFieldWord);
-
-
-	xil_printf("Done Admin Command OPC: %X\r\n", opc);
-
 }
 

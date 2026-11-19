@@ -25,6 +25,8 @@ int ZnsAppendIsActive(unsigned int cmdSlotTag);
 
 void ZnsAppendOnRxDmaDone(unsigned int cmdSlotTag);
 
+unsigned int ZnsAppendLiveCount(void);
+
 void parameterCheck();
 
 void resetZoneReg(int ZoneRegID);

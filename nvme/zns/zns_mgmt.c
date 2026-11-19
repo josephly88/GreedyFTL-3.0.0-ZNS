@@ -233,9 +233,6 @@ void resetZone(unsigned int zoneId){
 
     int WrittenSize = zoneReg.Write_Pointer - zoneReg.SLBA;
 
-    //xil_printf("Catch a zone reset command - zoneRegId : %d\r\n", zoneRegId);
-    //xil_printf("Reset Size in NVMe Block: %d\r\n", WrittenSize);
-
     // Erase all written blocks in the zone
     unsigned int innerBlockNo = 0;
     while(WrittenSize > 0){
