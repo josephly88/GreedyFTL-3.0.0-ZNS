@@ -106,6 +106,18 @@ void InitDataBuf()
 		dataBufMapPtr->dataBuf[bufEntry].hashPrevEntry = DATA_BUF_NONE;
 		dataBufMapPtr->dataBuf[bufEntry].hashNextEntry = DATA_BUF_NONE;
 	}
+
+	// Per-zone partial-slice slots (not on the FTL LRU/hash)
+	base = PARTIAL_SLICE_BUF_START;
+	for(bufEntry = base; bufEntry < base + MAXIMUM_ACTIVE_ZONE_COUNT; bufEntry++){
+		dataBufMapPtr->dataBuf[bufEntry].logicalSliceAddr = LSA_NONE;
+		dataBufMapPtr->dataBuf[bufEntry].prevEntry = 0;
+		dataBufMapPtr->dataBuf[bufEntry].nextEntry = 0;
+		dataBufMapPtr->dataBuf[bufEntry].dirty = DATA_BUF_CLEAN;
+		dataBufMapPtr->dataBuf[bufEntry].blockingReqTail =  REQ_SLOT_TAG_NONE;
+		dataBufMapPtr->dataBuf[bufEntry].hashPrevEntry = DATA_BUF_NONE;
+		dataBufMapPtr->dataBuf[bufEntry].hashNextEntry = DATA_BUF_NONE;
+	}
 }	
 
 unsigned int CheckDataBufHit(unsigned int reqSlotTag)

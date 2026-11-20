@@ -74,6 +74,11 @@ void ZnsProgramFinishedDirtyBufs(unsigned int zoneID);
 
 int ZnsZoneWriteRingDirty(unsigned int zoneID);
 
+unsigned int ZnsPartialSliceFindEligibleTail(unsigned int zoneID);
+void ZnsPartialSliceInvalidate(unsigned int zoneID);
+int ZnsPartialSliceSave(unsigned int zoneID);
+int ZnsPartialSliceRestore(unsigned int zoneID);
+
 void ZNS_ReqTransSliceToLowLevel(unsigned int reqSlotTag);
 
 unsigned int ZNS_AllocateWriteDataBuf(unsigned int zoneID, unsigned int reqSlotTag);

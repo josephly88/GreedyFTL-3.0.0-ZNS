@@ -15,6 +15,7 @@
 P_ZONE_MAP zoneMapPtr;
 P_VALID_BLOCK_GROUP_FIFO validBlockGroupFifoPtr;
 P_ZONE_WRITE_BUFFER_MAP zoneWriteBufMapPtr;
+P_ZONE_PARTIAL_SLICE_MAP zonePartialSliceMapPtr;
 P_UNI_BUF_REG uniBufRegPtr;
 P_WRR wrrPtr;
 
@@ -220,6 +221,12 @@ void InitZNS()
 	zoneWriteBufMapPtr->Head = 0;
 	zoneWriteBufMapPtr->Rear = MAXIMUM_OPEN_ZONE_COUNT - 1;
 	zoneWriteBufMapPtr->Num = MAXIMUM_OPEN_ZONE_COUNT;
+
+	zonePartialSliceMapPtr = (P_ZONE_PARTIAL_SLICE_MAP) ZONE_PARTIAL_SLICE_MAP_ADDR;
+	for(i = 0; i < MAXIMUM_ACTIVE_ZONE_COUNT; i++){
+		zonePartialSliceMapPtr->zonePartialSliceReg[i].occupied = 0;
+		zonePartialSliceMapPtr->zonePartialSliceReg[i].savedLsa = LSA_NONE;
+	}
 }
 
 void parameterCheck(){
@@ -372,6 +379,41 @@ static void ZnsDumpBufferOwners(void)
 	}
 }
 
+static void ZnsDrainSliceAndLowLevel(void)
+{
+	ReqTransSliceToLowLevel();
+	SyncAllLowLevelReqDone();
+}
+
+static int ZnsZoneWpIncomplete(unsigned int zoneID)
+{
+	unsigned int wp, slba, zoneEnd;
+
+	if(zoneID >= MAXIMUM_ACTIVE_ZONE_COUNT)
+		return 0;
+
+	wp = zoneMapPtr->zoneReg[zoneID].Write_Pointer;
+	slba = zoneMapPtr->zoneReg[zoneID].SLBA;
+	zoneEnd = slba + NVME_BLOCKS_PER_ZONE;
+	return (wp < zoneEnd) && ((wp % NVME_BLOCKS_PER_SLICE) != 0);
+}
+
+static void ZnsSanitizeWriteRing(int bufferID)
+{
+	unsigned int i;
+
+	if(bufferID < 0 || bufferID >= MAXIMUM_OPEN_ZONE_COUNT)
+		return;
+
+	for(i = 0; i < DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE; i++){
+		unsigned int dataBufEntry = ZNS_DATA_BUFFER_ENTRY_START
+			+ ((unsigned int)bufferID * DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE) + i;
+
+		dataBufMapPtr->dataBuf[dataBufEntry].dirty = DATA_BUF_CLEAN;
+		dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr = LSA_NONE;
+	}
+}
+
 unsigned int bufferIDFifo_Dequeue(){
 	int element = -1;
 	int fifoBefore = zoneWriteBufMapPtr->Num;
@@ -380,15 +422,36 @@ unsigned int bufferIDFifo_Dequeue(){
 		int zone_idx;
 		int donorZone = -1;
 		for(zone_idx = 0; zone_idx < MAXIMUM_ACTIVE_ZONE_COUNT; zone_idx++){
-			if(zoneMapPtr->zoneReg[zone_idx].Zone_State == FULL && zoneMapPtr->zoneReg[zone_idx].Buffer_ID != -1){
-				element = zoneMapPtr->zoneReg[zone_idx].Buffer_ID;
-				donorZone = zone_idx;
+			int bufferID;
+			int incompleteWp;
 
-				ZNS_EvictAllDataBufEntry(zone_idx);
-				zoneMapPtr->zoneReg[zone_idx].Buffer_ID = -1;
+			if(zoneMapPtr->zoneReg[zone_idx].Zone_State != FULL)
+				continue;
+			bufferID = zoneMapPtr->zoneReg[zone_idx].Buffer_ID;
+			if(bufferID < 0 || bufferID >= MAXIMUM_OPEN_ZONE_COUNT)
+				continue;
 
-				break;
-			}		
+			ZnsDrainSliceAndLowLevel();
+			ZnsProgramFinishedDirtyBufs((unsigned int)zone_idx);
+
+			incompleteWp = ZnsZoneWpIncomplete((unsigned int)zone_idx);
+			if(incompleteWp){
+				if(ZnsPartialSliceSave((unsigned int)zone_idx) != 0){
+					xil_printf("BUF_STEAL_SKIP zone=%d id=%d reason=SAVE_FAIL\r\n",
+						zone_idx, bufferID);
+					continue;
+				}
+				ZnsSanitizeWriteRing(bufferID);
+			}
+
+			ZNS_EvictAllDataBufEntry((unsigned int)zone_idx);
+			ZnsDrainSliceAndLowLevel();
+
+			zoneMapPtr->zoneReg[zone_idx].Buffer_ID = -1;
+			resetWriteBufferReg(bufferID);
+			element = bufferID;
+			donorZone = zone_idx;
+			break;
 		}
 		if(element < 0){
 			xil_printf("BUF_ALLOC_FAIL fifo_num=%d\r\n", fifoBefore);
@@ -567,6 +630,7 @@ int ZoneWriteCheck(unsigned int zoneID, unsigned int slba, unsigned int nlb,
 	int tookBuffer = 0;
 	int tookBlockGroup = 0;
 	int openThisZone = 0;
+	int acquiredFromFifo = 0;
 
 	zoneReg = zoneMapPtr->zoneReg[zoneID];
 
@@ -646,7 +710,9 @@ int ZoneWriteCheck(unsigned int zoneID, unsigned int slba, unsigned int nlb,
 
 	if(!ZnsBufferIdValid(bufferID)){
 		int bufferFromFifo = 0;
+		int fifoNumBeforeTake;
 
+		fifoNumBeforeTake = zoneWriteBufMapPtr->Num;
 		bufferID = ZnsTakeBufferId(&bufferFromFifo);
 		(void)bufferFromFifo;
 		if(!ZnsBufferIdValid(bufferID)){
@@ -657,6 +723,7 @@ int ZoneWriteCheck(unsigned int zoneID, unsigned int slba, unsigned int nlb,
 			return -1;
 		}
 		tookBuffer = 1;
+		acquiredFromFifo = (fifoNumBeforeTake > 0);
 	}
 
 	if(tookBuffer){
@@ -666,6 +733,30 @@ int ZoneWriteCheck(unsigned int zoneID, unsigned int slba, unsigned int nlb,
 	}
 	if(tookBlockGroup)
 		zoneMapPtr->zoneReg[zoneID].Phy_Block_Group_ID = blockGroupID;
+
+	if(tookBuffer && !acquiredFromFifo)
+		SyncAllLowLevelReqDone();
+
+	if(zonePartialSliceMapPtr->zonePartialSliceReg[zoneID].occupied){
+		if(!(tookBuffer && !acquiredFromFifo))
+			SyncAllLowLevelReqDone();
+		if(ZnsPartialSliceRestore(zoneID) != 0){
+			xil_printf("Zone [%d] partial-slice restore failed\r\n", zoneID);
+			if(tookBuffer && acquiredFromFifo){
+				zoneMapPtr->zoneReg[zoneID].Buffer_ID = -1;
+				resetWriteBufferReg(bufferID);
+				bufferIDFifo_Enqueue((unsigned int)bufferID);
+			}
+			if(tookBlockGroup){
+				zoneMapPtr->zoneReg[zoneID].Phy_Block_Group_ID = -1;
+				validBlockGroupFifo_Enqueue((unsigned int)blockGroupID);
+			}
+			ZnsResourceFail(sct, sc, dnr);
+			return -1;
+		}
+		zonePartialSliceMapPtr->zonePartialSliceReg[zoneID].occupied = 0;
+		zonePartialSliceMapPtr->zonePartialSliceReg[zoneID].savedLsa = LSA_NONE;
+	}
 
 	if(openThisZone){
 		zoneMapPtr->zoneReg[zoneID].Zone_State = IMPLICITLY_OPENED;
@@ -817,20 +908,35 @@ unsigned int CheckUnevictedSliceBuf(unsigned int reqSlotTag, unsigned int zoneID
 	if(zoneID >= MAXIMUM_ACTIVE_ZONE_COUNT)
 		return DATA_BUF_FAIL;
 
-	bufferID = zoneMapPtr->zoneReg[zoneID].Buffer_ID;
-	if(bufferID < 0)
-		return DATA_BUF_FAIL;
-
 	reqLsa = reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr;
-	for(i = 0; i < DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE; i++)
+	bufferID = zoneMapPtr->zoneReg[zoneID].Buffer_ID;
+	if(bufferID >= 0)
 	{
-		dataBufEntry = ZNS_DATA_BUFFER_ENTRY_START + (bufferID * DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE) + i;
-		if(dataBufMapPtr->dataBuf[dataBufEntry].dirty == DATA_BUF_DIRTY
-			&& dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr == reqLsa)
-			return dataBufEntry;
+		for(i = 0; i < DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE; i++)
+		{
+			dataBufEntry = ZNS_DATA_BUFFER_ENTRY_START + (bufferID * DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE) + i;
+			if(dataBufMapPtr->dataBuf[dataBufEntry].dirty == DATA_BUF_DIRTY
+				&& dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr == reqLsa)
+				return dataBufEntry;
+		}
+
+		return DATA_BUF_FAIL;
 	}
 
-	return DATA_BUF_FAIL;
+	if(bufferID != -1)
+		return DATA_BUF_FAIL;
+	if(Lsa2ZoneId(reqLsa) != zoneID)
+		return DATA_BUF_FAIL;
+	if(!zonePartialSliceMapPtr->zonePartialSliceReg[zoneID].occupied)
+		return DATA_BUF_FAIL;
+	if(zonePartialSliceMapPtr->zonePartialSliceReg[zoneID].savedLsa != reqLsa)
+		return DATA_BUF_FAIL;
+
+	dataBufEntry = PARTIAL_SLICE_BUF_START + zoneID;
+	if(dataBufEntry >= TOTAL_BUFFER_COUNT)
+		return DATA_BUF_FAIL;
+
+	return dataBufEntry;
 }
 
 static unsigned int znsReadBufIdx;
@@ -948,6 +1054,254 @@ int ZnsZoneWriteRingDirty(unsigned int zoneID)
 			return 1;
 	}
 
+	return 0;
+}
+
+static unsigned int ZnsZoneRingEntry(int bufferID, unsigned int idx)
+{
+	return ZNS_DATA_BUFFER_ENTRY_START
+		+ ((unsigned int)bufferID * DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE) + idx;
+}
+
+static void *ZnsDataBufPayload(unsigned int bufEntry)
+{
+	return (void *)(DATA_BUFFER_BASE_ADDR + bufEntry * BYTES_PER_DATA_REGION_OF_SLICE);
+}
+
+static int ZnsCurrentIncompleteWpLsa(unsigned int zoneID, unsigned int *wpLsa)
+{
+	unsigned int wp, slba, zoneEnd;
+
+	if(zoneID >= MAXIMUM_ACTIVE_ZONE_COUNT)
+		return 0;
+
+	wp = zoneMapPtr->zoneReg[zoneID].Write_Pointer;
+	slba = zoneMapPtr->zoneReg[zoneID].SLBA;
+	zoneEnd = slba + NVME_BLOCKS_PER_ZONE;
+	if(wp >= zoneEnd)
+		return 0;
+	if((wp % NVME_BLOCKS_PER_SLICE) == 0)
+		return 0;
+
+	*wpLsa = (zoneID * SLICE_PER_ZONE) + ((wp / NVME_BLOCKS_PER_SLICE) % SLICE_PER_ZONE);
+	return 1;
+}
+
+static unsigned int ZnsPartialSliceScanTail(unsigned int zoneID, const char **reason)
+{
+	unsigned int i, wpLsa, candidate, matchCount;
+	int bufferID;
+
+	*reason = "ZONE_ID";
+	if(zoneID >= MAXIMUM_ACTIVE_ZONE_COUNT)
+		return DATA_BUF_FAIL;
+	if(BUFFER_MODE != 0){
+		*reason = "BUFFER_MODE";
+		return DATA_BUF_FAIL;
+	}
+
+	bufferID = zoneMapPtr->zoneReg[zoneID].Buffer_ID;
+	if(!ZnsBufferIdValid(bufferID)){
+		*reason = "INVALID_ID";
+		return DATA_BUF_FAIL;
+	}
+
+	if(!ZnsCurrentIncompleteWpLsa(zoneID, &wpLsa)){
+		*reason = "ALIGNED_WP";
+		return DATA_BUF_FAIL;
+	}
+
+	candidate = DATA_BUF_FAIL;
+	matchCount = 0;
+	for(i = 0; i < DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE; i++){
+		unsigned int dataBufEntry, entryLsa;
+
+		dataBufEntry = ZnsZoneRingEntry(bufferID, i);
+		if(dataBufMapPtr->dataBuf[dataBufEntry].dirty != DATA_BUF_DIRTY)
+			continue;
+
+		entryLsa = dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr;
+		if(entryLsa == LSA_NONE){
+			*reason = "LSA_NONE";
+			return DATA_BUF_FAIL;
+		}
+		if(Lsa2ZoneId(entryLsa) != zoneID){
+			*reason = "STALE_LSA";
+			return DATA_BUF_FAIL;
+		}
+		if(entryLsa != wpLsa){
+			*reason = "UNEXPECTED_DIRTY";
+			return DATA_BUF_FAIL;
+		}
+		if(matchCount != 0){
+			*reason = "DUP_TAIL";
+			return DATA_BUF_FAIL;
+		}
+		candidate = dataBufEntry;
+		matchCount = 1;
+	}
+
+	if(matchCount != 1){
+		*reason = "NO_TAIL";
+		return DATA_BUF_FAIL;
+	}
+	if(dataBufMapPtr->dataBuf[candidate].blockingReqTail != REQ_SLOT_TAG_NONE){
+		*reason = "BLOCKING";
+		return DATA_BUF_FAIL;
+	}
+
+	*reason = "NONE";
+	return candidate;
+}
+
+unsigned int ZnsPartialSliceFindEligibleTail(unsigned int zoneID)
+{
+	const char *reason = "NONE";
+	unsigned int dataBufEntry;
+
+	dataBufEntry = ZnsPartialSliceScanTail(zoneID, &reason);
+	if(dataBufEntry == DATA_BUF_FAIL)
+		xil_printf("PARTIAL_TAIL_FAIL zone=%u reason=%s\r\n", zoneID, reason);
+	return dataBufEntry;
+}
+
+void ZnsPartialSliceInvalidate(unsigned int zoneID)
+{
+	unsigned int dataBufEntry;
+
+	if(zoneID >= MAXIMUM_ACTIVE_ZONE_COUNT)
+		return;
+
+	dataBufEntry = PARTIAL_SLICE_BUF_START + zoneID;
+	if(dataBufEntry >= TOTAL_BUFFER_COUNT)
+		return;
+
+	zonePartialSliceMapPtr->zonePartialSliceReg[zoneID].occupied = 0;
+	zonePartialSliceMapPtr->zonePartialSliceReg[zoneID].savedLsa = LSA_NONE;
+	dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr = LSA_NONE;
+	dataBufMapPtr->dataBuf[dataBufEntry].dirty = DATA_BUF_CLEAN;
+	dataBufMapPtr->dataBuf[dataBufEntry].blockingReqTail = REQ_SLOT_TAG_NONE;
+}
+
+int ZnsPartialSliceSave(unsigned int zoneID)
+{
+	const char *reason = "NONE";
+	unsigned int srcEntry, dstEntry, wpLsa;
+	int bufferID;
+
+	srcEntry = ZnsPartialSliceScanTail(zoneID, &reason);
+	if(srcEntry == DATA_BUF_FAIL){
+		xil_printf("PARTIAL_SAVE_FAIL zone=%u reason=%s\r\n", zoneID, reason);
+		return -1;
+	}
+
+	bufferID = zoneMapPtr->zoneReg[zoneID].Buffer_ID;
+	dstEntry = PARTIAL_SLICE_BUF_START + zoneID;
+	if(!ZnsCurrentIncompleteWpLsa(zoneID, &wpLsa)){
+		xil_printf("PARTIAL_SAVE_FAIL zone=%u reason=ALIGNED_WP\r\n", zoneID);
+		return -1;
+	}
+	if(dstEntry >= TOTAL_BUFFER_COUNT){
+		xil_printf("PARTIAL_SAVE_FAIL zone=%u reason=DST_RANGE\r\n", zoneID);
+		return -1;
+	}
+	if(zonePartialSliceMapPtr->zonePartialSliceReg[zoneID].occupied){
+		xil_printf("PARTIAL_SAVE_FAIL zone=%u reason=OCCUPIED src=%u dst=%u\r\n",
+			zoneID, srcEntry, dstEntry);
+		return -1;
+	}
+	if(dataBufMapPtr->dataBuf[dstEntry].dirty == DATA_BUF_DIRTY){
+		xil_printf("PARTIAL_SAVE_FAIL zone=%u reason=DST_DIRTY src=%u dst=%u lsa=0x%x\r\n",
+			zoneID, srcEntry, dstEntry, dataBufMapPtr->dataBuf[dstEntry].logicalSliceAddr);
+		return -1;
+	}
+	if(dataBufMapPtr->dataBuf[dstEntry].blockingReqTail != REQ_SLOT_TAG_NONE){
+		xil_printf("PARTIAL_SAVE_FAIL zone=%u reason=DST_BLOCKING src=%u dst=%u\r\n",
+			zoneID, srcEntry, dstEntry);
+		return -1;
+	}
+
+	memcpy(ZnsDataBufPayload(dstEntry), ZnsDataBufPayload(srcEntry), BYTES_PER_DATA_REGION_OF_SLICE);
+	zonePartialSliceMapPtr->zonePartialSliceReg[zoneID].savedLsa = wpLsa;
+	zonePartialSliceMapPtr->zonePartialSliceReg[zoneID].occupied = 1;
+
+	xil_printf("PARTIAL_SAVE_OK zone=%u id=%d src=%u dst=%u lsa=0x%x\r\n",
+		zoneID, bufferID, srcEntry, dstEntry, wpLsa);
+	return 0;
+}
+
+int ZnsPartialSliceRestore(unsigned int zoneID)
+{
+	unsigned int i, srcEntry, dstEntry, wpLsa, savedLsa;
+	int bufferID;
+
+	if(zoneID >= MAXIMUM_ACTIVE_ZONE_COUNT){
+		xil_printf("PARTIAL_RESTORE_FAIL zone=%u reason=ZONE_ID\r\n", zoneID);
+		return -1;
+	}
+	if(BUFFER_MODE != 0){
+		xil_printf("PARTIAL_RESTORE_FAIL zone=%u reason=BUFFER_MODE\r\n", zoneID);
+		return -1;
+	}
+	if(!zonePartialSliceMapPtr->zonePartialSliceReg[zoneID].occupied){
+		xil_printf("PARTIAL_RESTORE_FAIL zone=%u reason=NOT_OCCUPIED\r\n", zoneID);
+		return -1;
+	}
+	if(!ZnsCurrentIncompleteWpLsa(zoneID, &wpLsa)){
+		xil_printf("PARTIAL_RESTORE_FAIL zone=%u reason=ALIGNED_WP\r\n", zoneID);
+		return -1;
+	}
+
+	savedLsa = zonePartialSliceMapPtr->zonePartialSliceReg[zoneID].savedLsa;
+	if(savedLsa != wpLsa){
+		xil_printf("PARTIAL_RESTORE_FAIL zone=%u reason=LSA_MISMATCH saved=0x%x wp=0x%x\r\n",
+			zoneID, savedLsa, wpLsa);
+		return -1;
+	}
+
+	bufferID = zoneMapPtr->zoneReg[zoneID].Buffer_ID;
+	if(!ZnsBufferIdValid(bufferID)){
+		xil_printf("PARTIAL_RESTORE_FAIL zone=%u reason=INVALID_ID\r\n", zoneID);
+		return -1;
+	}
+	if(zoneWriteBufMapPtr->zoneWriteBufReg[bufferID].ZoneID != (int)zoneID){
+		xil_printf("PARTIAL_RESTORE_FAIL zone=%u reason=OWNER_MISMATCH id=%d owner=%d\r\n",
+			zoneID, bufferID, zoneWriteBufMapPtr->zoneWriteBufReg[bufferID].ZoneID);
+		return -1;
+	}
+
+	srcEntry = PARTIAL_SLICE_BUF_START + zoneID;
+	if(dataBufMapPtr->dataBuf[srcEntry].blockingReqTail != REQ_SLOT_TAG_NONE){
+		xil_printf("PARTIAL_RESTORE_FAIL zone=%u reason=SRC_BLOCKING src=%u\r\n",
+			zoneID, srcEntry);
+		return -1;
+	}
+
+	for(i = 0; i < DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE; i++){
+		unsigned int ringEntry = ZnsZoneRingEntry(bufferID, i);
+
+		if(dataBufMapPtr->dataBuf[ringEntry].dirty == DATA_BUF_DIRTY){
+			xil_printf("PARTIAL_RESTORE_FAIL zone=%u reason=RING_DIRTY id=%d idx=%u entry=%u lsa=0x%x\r\n",
+				zoneID, bufferID, i, ringEntry, dataBufMapPtr->dataBuf[ringEntry].logicalSliceAddr);
+			return -1;
+		}
+		if(dataBufMapPtr->dataBuf[ringEntry].blockingReqTail != REQ_SLOT_TAG_NONE){
+			xil_printf("PARTIAL_RESTORE_FAIL zone=%u reason=RING_BLOCKING id=%d idx=%u entry=%u\r\n",
+				zoneID, bufferID, i, ringEntry);
+			return -1;
+		}
+	}
+
+	dstEntry = ZnsZoneRingEntry(bufferID, 0);
+
+	memcpy(ZnsDataBufPayload(dstEntry), ZnsDataBufPayload(srcEntry), BYTES_PER_DATA_REGION_OF_SLICE);
+	dataBufMapPtr->dataBuf[dstEntry].logicalSliceAddr = savedLsa;
+	dataBufMapPtr->dataBuf[dstEntry].dirty = DATA_BUF_DIRTY;
+	zoneWriteBufMapPtr->zoneWriteBufReg[bufferID].curBufWriteIdx = 0;
+	zoneWriteBufMapPtr->zoneWriteBufReg[bufferID].dirtyBufIdx = -1;
+
+	xil_printf("PARTIAL_RESTORE_OK zone=%u id=%d src=%u dst=%u lsa=0x%x\r\n",
+		zoneID, bufferID, srcEntry, dstEntry, savedLsa);
 	return 0;
 }
 

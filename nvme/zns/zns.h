@@ -66,6 +66,9 @@
 #define OPEN_ZONE_DATA_BUFFER_ENTRY_COUNT					(MAXIMUM_OPEN_ZONE_COUNT * DATA_BUFFER_ENTRY_COUNT_PER_OPEN_ZONE)
 #define BUFFER_QUEUE_DEPTH									(OPEN_ZONE_DATA_BUFFER_ENTRY_COUNT / 8)
 
+/* One 16 KB dataBuf[] slot per active zone, after FTL + write-ring + read-ring. */
+#define PARTIAL_SLICE_BUF_START								(AVAILABLE_DATA_BUFFER_ENTRY_COUNT + OPEN_ZONE_DATA_BUFFER_ENTRY_COUNT + ACTIVE_ZONE_READ_BUFFER_ENTRY_COUNT)
+
 #define ZONE_BLOCK_GROUP_START								(ZNS_LBA_START_NVME_BLOCK / NVME_BLOCKS_PER_ZONE)
 
 /*-------------------------------------------------------------
@@ -127,6 +130,17 @@ typedef struct _ZONE_WRITE_BUFFER_MAP
 	int Rear;	// Tail of FIFO
 	int Num;
 } ZONE_WRITE_BUFFER_MAP, *P_ZONE_WRITE_BUFFER_MAP;
+
+typedef struct _ZONE_PARTIAL_SLICE_REG
+{
+	unsigned int occupied;
+	unsigned int savedLsa;
+} ZONE_PARTIAL_SLICE_REG;
+
+typedef struct _ZONE_PARTIAL_SLICE_MAP
+{
+	ZONE_PARTIAL_SLICE_REG zonePartialSliceReg[MAXIMUM_ACTIVE_ZONE_COUNT];
+} ZONE_PARTIAL_SLICE_MAP, *P_ZONE_PARTIAL_SLICE_MAP;
 
 typedef struct _UNI_BUF_REG
 {
