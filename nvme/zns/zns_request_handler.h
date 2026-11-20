@@ -41,7 +41,7 @@ void validBlockGroupFifo_Enqueue(unsigned int element);
 
 unsigned int bufferIDFifo_Dequeue();
 
-void bufferIDFifo_Enqueue(unsigned int element);
+void bufferIDFifo_Enqueue(unsigned int element, const char *reason, int zoneId);
 
 void wrr_init();
 

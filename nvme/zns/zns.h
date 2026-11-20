@@ -36,6 +36,15 @@
 #define NON_SHARE_MOD										(0)
 #define EVICTION_THRESHOLD									(16)
 
+/* 0: suppress FIFO/buffer-ID diagnostic UART. 1: restore those prints. */
+#define ZNS_FIFO_DIAGNOSTIC_LOG								0
+#if ZNS_FIFO_DIAGNOSTIC_LOG
+#include "xil_printf.h"
+#define ZNS_FIFO_LOG(...)									xil_printf(__VA_ARGS__)
+#else
+#define ZNS_FIFO_LOG(...)									do { } while (0)
+#endif
+
 // Each Entry is a slice (16KB)
 #define ACTIVE_ZONE_READ_BUFFER_ENTRY_COUNT					(64)
 

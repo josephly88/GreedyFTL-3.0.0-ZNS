@@ -227,6 +227,15 @@ void InitZNS()
 		zonePartialSliceMapPtr->zonePartialSliceReg[i].occupied = 0;
 		zonePartialSliceMapPtr->zonePartialSliceReg[i].savedLsa = LSA_NONE;
 	}
+
+#if ZNS_FIFO_DIAGNOSTIC_LOG
+	ZNS_FIFO_LOG("FIFO_INIT num=%d head=%d rear=%d\r\n",
+		zoneWriteBufMapPtr->Num, zoneWriteBufMapPtr->Head, zoneWriteBufMapPtr->Rear);
+	for(i = 0; i < MAXIMUM_OPEN_ZONE_COUNT; i++){
+		ZNS_FIFO_LOG("FIFO_INIT_LIST idx=%d val=%u\r\n",
+			i, zoneWriteBufMapPtr->FIFO_LIST[i]);
+	}
+#endif
 }
 
 void parameterCheck(){
@@ -364,17 +373,17 @@ static void ZnsDumpBufferOwners(void)
 	unsigned int zone;
 	unsigned int id;
 
-	xil_printf("BUF_STATE fifo_num=%d\r\n", zoneWriteBufMapPtr->Num);
+	ZNS_FIFO_LOG("BUF_STATE fifo_num=%d\r\n", zoneWriteBufMapPtr->Num);
 	for(zone = 0; zone < MAXIMUM_ACTIVE_ZONE_COUNT; zone++){
 		if(zoneMapPtr->zoneReg[zone].Buffer_ID != -1){
-			xil_printf("BUF_OWNER zone=%u state=%u buffer_id=%d wp=%u\r\n",
+			ZNS_FIFO_LOG("BUF_OWNER zone=%u state=%u buffer_id=%d wp=%u\r\n",
 				zone, (unsigned int)zoneMapPtr->zoneReg[zone].Zone_State,
 				zoneMapPtr->zoneReg[zone].Buffer_ID,
 				zoneMapPtr->zoneReg[zone].Write_Pointer);
 		}
 	}
 	for(id = 0; id < MAXIMUM_OPEN_ZONE_COUNT; id++){
-		xil_printf("BUF_MAP id=%u zone_id=%d\r\n",
+		ZNS_FIFO_LOG("BUF_MAP id=%u zone_id=%d\r\n",
 			id, zoneWriteBufMapPtr->zoneWriteBufReg[id].ZoneID);
 	}
 }
@@ -416,11 +425,15 @@ static void ZnsSanitizeWriteRing(int bufferID)
 
 unsigned int bufferIDFifo_Dequeue(){
 	int element = -1;
+#if ZNS_FIFO_DIAGNOSTIC_LOG
 	int fifoBefore = zoneWriteBufMapPtr->Num;
+	int headBefore = zoneWriteBufMapPtr->Head;
+	int rearBefore = zoneWriteBufMapPtr->Rear;
+	int donorZone = -1;
+#endif
 
 	if(zoneWriteBufMapPtr->Num == 0){
 		int zone_idx;
-		int donorZone = -1;
 		for(zone_idx = 0; zone_idx < MAXIMUM_ACTIVE_ZONE_COUNT; zone_idx++){
 			int bufferID;
 			int incompleteWp;
@@ -437,7 +450,7 @@ unsigned int bufferIDFifo_Dequeue(){
 			incompleteWp = ZnsZoneWpIncomplete((unsigned int)zone_idx);
 			if(incompleteWp){
 				if(ZnsPartialSliceSave((unsigned int)zone_idx) != 0){
-					xil_printf("BUF_STEAL_SKIP zone=%d id=%d reason=SAVE_FAIL\r\n",
+					ZNS_FIFO_LOG("BUF_STEAL_SKIP zone=%d id=%d reason=SAVE_FAIL\r\n",
 						zone_idx, bufferID);
 					continue;
 				}
@@ -447,20 +460,31 @@ unsigned int bufferIDFifo_Dequeue(){
 			ZNS_EvictAllDataBufEntry((unsigned int)zone_idx);
 			ZnsDrainSliceAndLowLevel();
 
+#if ZNS_FIFO_DIAGNOSTIC_LOG
+			donorZone = zone_idx;
+#endif
+			element = bufferID;
+			ZNS_FIFO_LOG("BUF_OWNER_BEGIN reason=FULL_STEAL id=%d zone=%d prev=%d new=%d\r\n",
+				bufferID, zone_idx, zone_idx, -1);
 			zoneMapPtr->zoneReg[zone_idx].Buffer_ID = -1;
 			resetWriteBufferReg(bufferID);
-			element = bufferID;
-			donorZone = zone_idx;
+			ZNS_FIFO_LOG("BUF_OWNER_DONE reason=FULL_STEAL id=%d zone=%d buffer_id=%d reverse_zone=%d\r\n",
+				element, donorZone,
+				zoneMapPtr->zoneReg[donorZone].Buffer_ID,
+				zoneWriteBufMapPtr->zoneWriteBufReg[element].ZoneID);
 			break;
 		}
 		if(element < 0){
-			xil_printf("BUF_ALLOC_FAIL fifo_num=%d\r\n", fifoBefore);
-			xil_printf("BUF_ALLOC_FAIL no free ID and no eligible FULL-zone donor\r\n");
+			ZNS_FIFO_LOG("BUF_ALLOC_FAIL fifo_num=%d\r\n", fifoBefore);
+			ZNS_FIFO_LOG("BUF_ALLOC_FAIL no free ID and no eligible FULL-zone donor\r\n");
+#if ZNS_FIFO_DIAGNOSTIC_LOG
 			ZnsDumpBufferOwners();
+#endif
 		}
 		else{
-			xil_printf("BUF_ALLOC source=FULL_STEAL id=%d donor_zone=%d fifo_before=%d\r\n",
-				element, donorZone, fifoBefore);
+			ZNS_FIFO_LOG("BUF_ALLOC source=FULL_STEAL id=%d donor_zone=%d fifo_before=%d fifo_after=%d head_before=%d head_after=%d rear_before=%d rear_after=%d\r\n",
+				element, donorZone, fifoBefore, zoneWriteBufMapPtr->Num,
+				headBefore, zoneWriteBufMapPtr->Head, rearBefore, zoneWriteBufMapPtr->Rear);
 		}
 	}
 	else{
@@ -469,14 +493,24 @@ unsigned int bufferIDFifo_Dequeue(){
 			zoneWriteBufMapPtr->Head = (zoneWriteBufMapPtr->Head + 1) % MAXIMUM_OPEN_ZONE_COUNT;
 
 		zoneWriteBufMapPtr->Num--;
-		xil_printf("BUF_ALLOC source=FIFO id=%d fifo_before=%d fifo_after=%d\r\n",
-			element, fifoBefore, zoneWriteBufMapPtr->Num);
+		ZNS_FIFO_LOG("BUF_ALLOC source=FIFO id=%d fifo_before=%d fifo_after=%d head_before=%d head_after=%d rear_before=%d rear_after=%d\r\n",
+			element, fifoBefore, zoneWriteBufMapPtr->Num,
+			headBefore, zoneWriteBufMapPtr->Head, rearBefore, zoneWriteBufMapPtr->Rear);
 	}
 
 	return element;
 }
 
-void bufferIDFifo_Enqueue(unsigned int element){
+void bufferIDFifo_Enqueue(unsigned int element, const char *reason, int zoneId){
+#if ZNS_FIFO_DIAGNOSTIC_LOG
+	int numBefore = zoneWriteBufMapPtr->Num;
+	int headBefore = zoneWriteBufMapPtr->Head;
+	int rearBefore = zoneWriteBufMapPtr->Rear;
+#else
+	(void)reason;
+	(void)zoneId;
+#endif
+
 	if(zoneWriteBufMapPtr->Num >= MAXIMUM_OPEN_ZONE_COUNT)
 		assert(!"[Error] zoneWriteBufMapPtr is full [Error]");
 
@@ -485,6 +519,11 @@ void bufferIDFifo_Enqueue(unsigned int element){
 	zoneWriteBufMapPtr->FIFO_LIST[zoneWriteBufMapPtr->Rear] = element;
 
 	zoneWriteBufMapPtr->Num++;
+#if ZNS_FIFO_DIAGNOSTIC_LOG
+	ZNS_FIFO_LOG("BUF_ENQ reason=%s id=%u zone=%d num_before=%d num_after=%d head_before=%d head_after=%d rear_before=%d rear_after=%d\r\n",
+		reason, element, zoneId, numBefore, zoneWriteBufMapPtr->Num,
+		headBefore, zoneWriteBufMapPtr->Head, rearBefore, zoneWriteBufMapPtr->Rear);
+#endif
 }
 
 void wrr_init() {
@@ -727,9 +766,24 @@ int ZoneWriteCheck(unsigned int zoneID, unsigned int slba, unsigned int nlb,
 	}
 
 	if(tookBuffer){
+#if ZNS_FIFO_DIAGNOSTIC_LOG
+		int prevOwner = -1;
+		int reverseZone = -1;
+
+		if(acquiredFromFifo && BUFFER_MODE == 0)
+			prevOwner = zoneWriteBufMapPtr->zoneWriteBufReg[bufferID].ZoneID;
+#endif
 		zoneMapPtr->zoneReg[zoneID].Buffer_ID = bufferID;
 		if(BUFFER_MODE == 0)
 			zoneWriteBufMapPtr->zoneWriteBufReg[bufferID].ZoneID = zoneID;
+#if ZNS_FIFO_DIAGNOSTIC_LOG
+		if(BUFFER_MODE == 0)
+			reverseZone = zoneWriteBufMapPtr->zoneWriteBufReg[bufferID].ZoneID;
+		ZNS_FIFO_LOG("BUF_OWNER_DONE reason=%s id=%d zone=%u prev=%d new=%d buffer_id=%d reverse_zone=%d\r\n",
+			acquiredFromFifo ? "FIFO_ALLOC" : "FULL_STEAL",
+			bufferID, zoneID, prevOwner, (int)zoneID,
+			zoneMapPtr->zoneReg[zoneID].Buffer_ID, reverseZone);
+#endif
 	}
 	if(tookBlockGroup)
 		zoneMapPtr->zoneReg[zoneID].Phy_Block_Group_ID = blockGroupID;
@@ -741,11 +795,17 @@ int ZoneWriteCheck(unsigned int zoneID, unsigned int slba, unsigned int nlb,
 		if(!(tookBuffer && !acquiredFromFifo))
 			SyncAllLowLevelReqDone();
 		if(ZnsPartialSliceRestore(zoneID) != 0){
-			xil_printf("Zone [%d] partial-slice restore failed\r\n", zoneID);
+			ZNS_FIFO_LOG("Zone [%d] partial-slice restore failed\r\n", zoneID);
 			if(tookBuffer && acquiredFromFifo){
+				ZNS_FIFO_LOG("BUF_OWNER_BEGIN reason=RESTORE_ROLLBACK id=%d zone=%u prev=%d new=%d\r\n",
+					bufferID, zoneID, (int)zoneID, -1);
 				zoneMapPtr->zoneReg[zoneID].Buffer_ID = -1;
 				resetWriteBufferReg(bufferID);
-				bufferIDFifo_Enqueue((unsigned int)bufferID);
+				bufferIDFifo_Enqueue((unsigned int)bufferID, "RESTORE_ROLLBACK", (int)zoneID);
+				ZNS_FIFO_LOG("BUF_OWNER_DONE reason=RESTORE_ROLLBACK id=%d zone=%u buffer_id=%d reverse_zone=%d\r\n",
+					bufferID, zoneID,
+					zoneMapPtr->zoneReg[zoneID].Buffer_ID,
+					zoneWriteBufMapPtr->zoneWriteBufReg[bufferID].ZoneID);
 			}
 			if(tookBlockGroup){
 				zoneMapPtr->zoneReg[zoneID].Phy_Block_Group_ID = -1;
@@ -1161,7 +1221,7 @@ unsigned int ZnsPartialSliceFindEligibleTail(unsigned int zoneID)
 
 	dataBufEntry = ZnsPartialSliceScanTail(zoneID, &reason);
 	if(dataBufEntry == DATA_BUF_FAIL)
-		xil_printf("PARTIAL_TAIL_FAIL zone=%u reason=%s\r\n", zoneID, reason);
+		ZNS_FIFO_LOG("PARTIAL_TAIL_FAIL zone=%u reason=%s\r\n", zoneID, reason);
 	return dataBufEntry;
 }
 
@@ -1191,32 +1251,32 @@ int ZnsPartialSliceSave(unsigned int zoneID)
 
 	srcEntry = ZnsPartialSliceScanTail(zoneID, &reason);
 	if(srcEntry == DATA_BUF_FAIL){
-		xil_printf("PARTIAL_SAVE_FAIL zone=%u reason=%s\r\n", zoneID, reason);
+		ZNS_FIFO_LOG("PARTIAL_SAVE_FAIL zone=%u reason=%s\r\n", zoneID, reason);
 		return -1;
 	}
 
 	bufferID = zoneMapPtr->zoneReg[zoneID].Buffer_ID;
 	dstEntry = PARTIAL_SLICE_BUF_START + zoneID;
 	if(!ZnsCurrentIncompleteWpLsa(zoneID, &wpLsa)){
-		xil_printf("PARTIAL_SAVE_FAIL zone=%u reason=ALIGNED_WP\r\n", zoneID);
+		ZNS_FIFO_LOG("PARTIAL_SAVE_FAIL zone=%u reason=ALIGNED_WP\r\n", zoneID);
 		return -1;
 	}
 	if(dstEntry >= TOTAL_BUFFER_COUNT){
-		xil_printf("PARTIAL_SAVE_FAIL zone=%u reason=DST_RANGE\r\n", zoneID);
+		ZNS_FIFO_LOG("PARTIAL_SAVE_FAIL zone=%u reason=DST_RANGE\r\n", zoneID);
 		return -1;
 	}
 	if(zonePartialSliceMapPtr->zonePartialSliceReg[zoneID].occupied){
-		xil_printf("PARTIAL_SAVE_FAIL zone=%u reason=OCCUPIED src=%u dst=%u\r\n",
+		ZNS_FIFO_LOG("PARTIAL_SAVE_FAIL zone=%u reason=OCCUPIED src=%u dst=%u\r\n",
 			zoneID, srcEntry, dstEntry);
 		return -1;
 	}
 	if(dataBufMapPtr->dataBuf[dstEntry].dirty == DATA_BUF_DIRTY){
-		xil_printf("PARTIAL_SAVE_FAIL zone=%u reason=DST_DIRTY src=%u dst=%u lsa=0x%x\r\n",
+		ZNS_FIFO_LOG("PARTIAL_SAVE_FAIL zone=%u reason=DST_DIRTY src=%u dst=%u lsa=0x%x\r\n",
 			zoneID, srcEntry, dstEntry, dataBufMapPtr->dataBuf[dstEntry].logicalSliceAddr);
 		return -1;
 	}
 	if(dataBufMapPtr->dataBuf[dstEntry].blockingReqTail != REQ_SLOT_TAG_NONE){
-		xil_printf("PARTIAL_SAVE_FAIL zone=%u reason=DST_BLOCKING src=%u dst=%u\r\n",
+		ZNS_FIFO_LOG("PARTIAL_SAVE_FAIL zone=%u reason=DST_BLOCKING src=%u dst=%u\r\n",
 			zoneID, srcEntry, dstEntry);
 		return -1;
 	}
@@ -1225,7 +1285,7 @@ int ZnsPartialSliceSave(unsigned int zoneID)
 	zonePartialSliceMapPtr->zonePartialSliceReg[zoneID].savedLsa = wpLsa;
 	zonePartialSliceMapPtr->zonePartialSliceReg[zoneID].occupied = 1;
 
-	xil_printf("PARTIAL_SAVE_OK zone=%u id=%d src=%u dst=%u lsa=0x%x\r\n",
+	ZNS_FIFO_LOG("PARTIAL_SAVE_OK zone=%u id=%d src=%u dst=%u lsa=0x%x\r\n",
 		zoneID, bufferID, srcEntry, dstEntry, wpLsa);
 	return 0;
 }
@@ -1236,43 +1296,43 @@ int ZnsPartialSliceRestore(unsigned int zoneID)
 	int bufferID;
 
 	if(zoneID >= MAXIMUM_ACTIVE_ZONE_COUNT){
-		xil_printf("PARTIAL_RESTORE_FAIL zone=%u reason=ZONE_ID\r\n", zoneID);
+		ZNS_FIFO_LOG("PARTIAL_RESTORE_FAIL zone=%u reason=ZONE_ID\r\n", zoneID);
 		return -1;
 	}
 	if(BUFFER_MODE != 0){
-		xil_printf("PARTIAL_RESTORE_FAIL zone=%u reason=BUFFER_MODE\r\n", zoneID);
+		ZNS_FIFO_LOG("PARTIAL_RESTORE_FAIL zone=%u reason=BUFFER_MODE\r\n", zoneID);
 		return -1;
 	}
 	if(!zonePartialSliceMapPtr->zonePartialSliceReg[zoneID].occupied){
-		xil_printf("PARTIAL_RESTORE_FAIL zone=%u reason=NOT_OCCUPIED\r\n", zoneID);
+		ZNS_FIFO_LOG("PARTIAL_RESTORE_FAIL zone=%u reason=NOT_OCCUPIED\r\n", zoneID);
 		return -1;
 	}
 	if(!ZnsCurrentIncompleteWpLsa(zoneID, &wpLsa)){
-		xil_printf("PARTIAL_RESTORE_FAIL zone=%u reason=ALIGNED_WP\r\n", zoneID);
+		ZNS_FIFO_LOG("PARTIAL_RESTORE_FAIL zone=%u reason=ALIGNED_WP\r\n", zoneID);
 		return -1;
 	}
 
 	savedLsa = zonePartialSliceMapPtr->zonePartialSliceReg[zoneID].savedLsa;
 	if(savedLsa != wpLsa){
-		xil_printf("PARTIAL_RESTORE_FAIL zone=%u reason=LSA_MISMATCH saved=0x%x wp=0x%x\r\n",
+		ZNS_FIFO_LOG("PARTIAL_RESTORE_FAIL zone=%u reason=LSA_MISMATCH saved=0x%x wp=0x%x\r\n",
 			zoneID, savedLsa, wpLsa);
 		return -1;
 	}
 
 	bufferID = zoneMapPtr->zoneReg[zoneID].Buffer_ID;
 	if(!ZnsBufferIdValid(bufferID)){
-		xil_printf("PARTIAL_RESTORE_FAIL zone=%u reason=INVALID_ID\r\n", zoneID);
+		ZNS_FIFO_LOG("PARTIAL_RESTORE_FAIL zone=%u reason=INVALID_ID\r\n", zoneID);
 		return -1;
 	}
 	if(zoneWriteBufMapPtr->zoneWriteBufReg[bufferID].ZoneID != (int)zoneID){
-		xil_printf("PARTIAL_RESTORE_FAIL zone=%u reason=OWNER_MISMATCH id=%d owner=%d\r\n",
+		ZNS_FIFO_LOG("PARTIAL_RESTORE_FAIL zone=%u reason=OWNER_MISMATCH id=%d owner=%d\r\n",
 			zoneID, bufferID, zoneWriteBufMapPtr->zoneWriteBufReg[bufferID].ZoneID);
 		return -1;
 	}
 
 	srcEntry = PARTIAL_SLICE_BUF_START + zoneID;
 	if(dataBufMapPtr->dataBuf[srcEntry].blockingReqTail != REQ_SLOT_TAG_NONE){
-		xil_printf("PARTIAL_RESTORE_FAIL zone=%u reason=SRC_BLOCKING src=%u\r\n",
+		ZNS_FIFO_LOG("PARTIAL_RESTORE_FAIL zone=%u reason=SRC_BLOCKING src=%u\r\n",
 			zoneID, srcEntry);
 		return -1;
 	}
@@ -1281,12 +1341,12 @@ int ZnsPartialSliceRestore(unsigned int zoneID)
 		unsigned int ringEntry = ZnsZoneRingEntry(bufferID, i);
 
 		if(dataBufMapPtr->dataBuf[ringEntry].dirty == DATA_BUF_DIRTY){
-			xil_printf("PARTIAL_RESTORE_FAIL zone=%u reason=RING_DIRTY id=%d idx=%u entry=%u lsa=0x%x\r\n",
+			ZNS_FIFO_LOG("PARTIAL_RESTORE_FAIL zone=%u reason=RING_DIRTY id=%d idx=%u entry=%u lsa=0x%x\r\n",
 				zoneID, bufferID, i, ringEntry, dataBufMapPtr->dataBuf[ringEntry].logicalSliceAddr);
 			return -1;
 		}
 		if(dataBufMapPtr->dataBuf[ringEntry].blockingReqTail != REQ_SLOT_TAG_NONE){
-			xil_printf("PARTIAL_RESTORE_FAIL zone=%u reason=RING_BLOCKING id=%d idx=%u entry=%u\r\n",
+			ZNS_FIFO_LOG("PARTIAL_RESTORE_FAIL zone=%u reason=RING_BLOCKING id=%d idx=%u entry=%u\r\n",
 				zoneID, bufferID, i, ringEntry);
 			return -1;
 		}
@@ -1300,7 +1360,7 @@ int ZnsPartialSliceRestore(unsigned int zoneID)
 	zoneWriteBufMapPtr->zoneWriteBufReg[bufferID].curBufWriteIdx = 0;
 	zoneWriteBufMapPtr->zoneWriteBufReg[bufferID].dirtyBufIdx = -1;
 
-	xil_printf("PARTIAL_RESTORE_OK zone=%u id=%d src=%u dst=%u lsa=0x%x\r\n",
+	ZNS_FIFO_LOG("PARTIAL_RESTORE_OK zone=%u id=%d src=%u dst=%u lsa=0x%x\r\n",
 		zoneID, bufferID, srcEntry, dstEntry, savedLsa);
 	return 0;
 }
