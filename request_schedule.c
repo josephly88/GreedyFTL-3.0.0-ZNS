@@ -951,8 +951,9 @@ void ExecuteNandReq(unsigned int chNo, unsigned int wayNo, unsigned int reqStatu
 
 				if((reqPoolPtr->reqPool[reqSlotTag].reqCode == REQ_CODE_READ) || (reqPoolPtr->reqPool[reqSlotTag].reqCode == REQ_CODE_READ_TRANSFER))
 					if(reqPoolPtr->reqPool[reqSlotTag].reqOpt.hostNvmeRead)
-						if(ZnsMarkHostReadFailed(reqPoolPtr->reqPool[reqSlotTag].nvmeCmdSlotTag, reqPoolPtr->reqPool[reqSlotTag].reqOpt.nvmeCmdEpoch))
-							ZnsAbortNvmeIo(reqPoolPtr->reqPool[reqSlotTag].nvmeCmdSlotTag, SCT_MEDIA_AND_DATA_INTEGRITY_ERRORS, SC_UNRECOVERED_READ_ERROR, 1);
+						ZnsAbortNvmeIo(reqPoolPtr->reqPool[reqSlotTag].nvmeCmdSlotTag,
+							reqPoolPtr->reqPool[reqSlotTag].reqOpt.nvmeCmdEpoch,
+							SCT_MEDIA_AND_DATA_INTEGRITY_ERRORS, SC_UNRECOVERED_READ_ERROR, 1);
 
 				retryLimitTablePtr->retryLimit[chNo][wayNo] = RETRY_LIMIT;
 				GetFromNandReqQ(chNo, wayNo, reqStatus, reqPoolPtr->reqPool[reqSlotTag].reqCode);

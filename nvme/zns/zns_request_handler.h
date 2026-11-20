@@ -5,15 +5,15 @@
 
 void InitZNS();
 
-void ZnsAbortNvmeIo(unsigned int cmdSlotTag, unsigned char sct, unsigned char sc, unsigned char dnr);
+void ZnsAbortNvmeIo(unsigned int cmdSlotTag, unsigned short epoch, unsigned char sct, unsigned char sc, unsigned char dnr);
 
 void ZnsBeginNvmeCmd(unsigned int cmdSlotTag);
 
-unsigned char ZnsNvmeCmdEpoch(unsigned int cmdSlotTag);
+unsigned short ZnsNvmeCmdEpoch(unsigned int cmdSlotTag);
 
-int ZnsMarkHostReadFailed(unsigned int cmdSlotTag, unsigned char epoch);
+int ZnsHostCmdIsInactive(unsigned int cmdSlotTag, unsigned short epoch);
 
-int ZnsHostReadAutoCplOff(unsigned int cmdSlotTag, unsigned char epoch);
+int ZnsHostReadAutoCplOff(unsigned int cmdSlotTag, unsigned short epoch);
 
 unsigned short ZnsStatusWord(unsigned char sct, unsigned char sc, unsigned char dnr);
 

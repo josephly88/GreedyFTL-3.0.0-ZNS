@@ -33,7 +33,7 @@ typedef struct _ZNS_APPEND_CPL
 } ZNS_APPEND_CPL;
 
 static ZNS_APPEND_CPL znsAppendCpl[ZNS_APPEND_SLOT_COUNT];
-static unsigned char znsNvmeCmdEpoch[ZNS_APPEND_SLOT_COUNT];
+static unsigned short znsNvmeCmdEpoch[ZNS_APPEND_SLOT_COUNT];
 static unsigned char znsNvmeCmdFailed[ZNS_APPEND_SLOT_COUNT];
 
 static void ZnsAppendDisarm(unsigned int cmdSlotTag)
@@ -113,8 +113,23 @@ unsigned short ZnsStatusWord(unsigned char sct, unsigned char sc, unsigned char 
 	return cpl.statusFieldWord;
 }
 
-void ZnsAbortNvmeIo(unsigned int cmdSlotTag, unsigned char sct, unsigned char sc, unsigned char dnr)
+static int ZnsMarkNvmeCmdCompleted(unsigned int cmdSlotTag, unsigned short epoch)
 {
+	if(cmdSlotTag >= ZNS_APPEND_SLOT_COUNT)
+		return 0;
+	if(znsNvmeCmdEpoch[cmdSlotTag] != epoch)
+		return 0;
+	if(znsNvmeCmdFailed[cmdSlotTag])
+		return 0;
+
+	znsNvmeCmdFailed[cmdSlotTag] = 1;
+	return 1;
+}
+
+void ZnsAbortNvmeIo(unsigned int cmdSlotTag, unsigned short epoch, unsigned char sct, unsigned char sc, unsigned char dnr)
+{
+	if(!ZnsMarkNvmeCmdCompleted(cmdSlotTag, epoch))
+		return;
 	ZnsAppendDisarm(cmdSlotTag);
 	set_auto_nvme_cpl(cmdSlotTag, 0, ZnsStatusWord(sct, sc, dnr));
 }
@@ -128,7 +143,7 @@ void ZnsBeginNvmeCmd(unsigned int cmdSlotTag)
 	znsNvmeCmdFailed[cmdSlotTag] = 0;
 }
 
-unsigned char ZnsNvmeCmdEpoch(unsigned int cmdSlotTag)
+unsigned short ZnsNvmeCmdEpoch(unsigned int cmdSlotTag)
 {
 	if(cmdSlotTag >= ZNS_APPEND_SLOT_COUNT)
 		return 0;
@@ -136,20 +151,7 @@ unsigned char ZnsNvmeCmdEpoch(unsigned int cmdSlotTag)
 	return znsNvmeCmdEpoch[cmdSlotTag];
 }
 
-int ZnsMarkHostReadFailed(unsigned int cmdSlotTag, unsigned char epoch)
-{
-	if(cmdSlotTag >= ZNS_APPEND_SLOT_COUNT)
-		return 0;
-	if(znsNvmeCmdEpoch[cmdSlotTag] != epoch)
-		return 0;
-	if(znsNvmeCmdFailed[cmdSlotTag])
-		return 0;
-
-	znsNvmeCmdFailed[cmdSlotTag] = 1;
-	return 1;
-}
-
-int ZnsHostReadAutoCplOff(unsigned int cmdSlotTag, unsigned char epoch)
+int ZnsHostCmdIsInactive(unsigned int cmdSlotTag, unsigned short epoch)
 {
 	if(cmdSlotTag >= ZNS_APPEND_SLOT_COUNT)
 		return 0;
@@ -157,6 +159,11 @@ int ZnsHostReadAutoCplOff(unsigned int cmdSlotTag, unsigned char epoch)
 		return 1;
 
 	return znsNvmeCmdFailed[cmdSlotTag];
+}
+
+int ZnsHostReadAutoCplOff(unsigned int cmdSlotTag, unsigned short epoch)
+{
+	return ZnsHostCmdIsInactive(cmdSlotTag, epoch);
 }
 
 void InitZNS()
@@ -1367,12 +1374,23 @@ int ZnsPartialSliceRestore(unsigned int zoneID)
 
 static void ZnsAbortSliceReq(unsigned int reqSlotTag, unsigned char sct, unsigned char sc, unsigned char dnr)
 {
-	ZnsAbortNvmeIo(reqPoolPtr->reqPool[reqSlotTag].nvmeCmdSlotTag, sct, sc, dnr);
+	ZnsAbortNvmeIo(reqPoolPtr->reqPool[reqSlotTag].nvmeCmdSlotTag,
+		reqPoolPtr->reqPool[reqSlotTag].reqOpt.nvmeCmdEpoch, sct, sc, dnr);
 	PutToFreeReqQ(reqSlotTag);
 }
 
 void ZNS_ReqTransSliceToLowLevel(unsigned int reqSlotTag){
     unsigned int zoneID, dataBufEntry;
+	unsigned int cmdSlotTag;
+	unsigned short capturedEpoch;
+
+	cmdSlotTag = reqPoolPtr->reqPool[reqSlotTag].nvmeCmdSlotTag;
+	capturedEpoch = reqPoolPtr->reqPool[reqSlotTag].reqOpt.nvmeCmdEpoch;
+	if(ZnsHostCmdIsInactive(cmdSlotTag, capturedEpoch))
+	{
+		PutToFreeReqQ(reqSlotTag);
+		return;
+	}
 
 	zoneID = Lsa2ZoneId(reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr);
 

@@ -345,14 +345,14 @@ void handle_nvme_io_zns_zone_append(unsigned int cmdSlotTag, NVME_IO_COMMAND *nv
 
 	if((nvmeIOCmd->PRP1[0] & 0xF) != 0 || (nvmeIOCmd->PRP2[0] & 0xF) != 0)
 	{
-		ZnsAbortNvmeIo(cmdSlotTag, SCT_GENERIC_COMMAND_STATUS, SC_PRP_OFFSET_INVALID, 1);
+		ZnsAbortNvmeIo(cmdSlotTag, ZnsNvmeCmdEpoch(cmdSlotTag), SCT_GENERIC_COMMAND_STATUS, SC_PRP_OFFSET_INVALID, 1);
 		return;
 	}
 
 	/* Zone Append SLBA is the zone start. The assigned LBA is the write pointer. */
 	if(nvmeIOCmd->dword11 != 0)
 	{
-		ZnsAbortNvmeIo(cmdSlotTag, SCT_COMMAND_SPECIFIC_STATUS, SC_ZONE_INVALID_WRITE, 1);
+		ZnsAbortNvmeIo(cmdSlotTag, ZnsNvmeCmdEpoch(cmdSlotTag), SCT_COMMAND_SPECIFIC_STATUS, SC_ZONE_INVALID_WRITE, 1);
 		return;
 	}
 
@@ -360,31 +360,31 @@ void handle_nvme_io_zns_zone_append(unsigned int cmdSlotTag, NVME_IO_COMMAND *nv
 	zoneMap = (P_ZONE_MAP)ZONE_MAP_ADDR;
 	if(zoneID >= MAXIMUM_ACTIVE_ZONE_COUNT || zoneMap->zoneReg[zoneID].SLBA != slba)
 	{
-		ZnsAbortNvmeIo(cmdSlotTag, SCT_COMMAND_SPECIFIC_STATUS, SC_ZONE_INVALID_WRITE, 1);
+		ZnsAbortNvmeIo(cmdSlotTag, ZnsNvmeCmdEpoch(cmdSlotTag), SCT_COMMAND_SPECIFIC_STATUS, SC_ZONE_INVALID_WRITE, 1);
 		return;
 	}
 
 	zoneReg = zoneMap->zoneReg[zoneID];
 	if(zoneReg.Zone_State == FULL)
 	{
-		ZnsAbortNvmeIo(cmdSlotTag, SCT_COMMAND_SPECIFIC_STATUS, SC_ZONE_IS_FULL, 1);
+		ZnsAbortNvmeIo(cmdSlotTag, ZnsNvmeCmdEpoch(cmdSlotTag), SCT_COMMAND_SPECIFIC_STATUS, SC_ZONE_IS_FULL, 1);
 		return;
 	}
 	if(zoneReg.Zone_State == READ_ONLY)
 	{
-		ZnsAbortNvmeIo(cmdSlotTag, SCT_COMMAND_SPECIFIC_STATUS, SC_ZONE_IS_READ_ONLY, 1);
+		ZnsAbortNvmeIo(cmdSlotTag, ZnsNvmeCmdEpoch(cmdSlotTag), SCT_COMMAND_SPECIFIC_STATUS, SC_ZONE_IS_READ_ONLY, 1);
 		return;
 	}
 	if(zoneReg.Zone_State == OFFLINE)
 	{
-		ZnsAbortNvmeIo(cmdSlotTag, SCT_COMMAND_SPECIFIC_STATUS, SC_ZONE_IS_OFFLINE, 1);
+		ZnsAbortNvmeIo(cmdSlotTag, ZnsNvmeCmdEpoch(cmdSlotTag), SCT_COMMAND_SPECIFIC_STATUS, SC_ZONE_IS_OFFLINE, 1);
 		return;
 	}
 
 	blockCount = nlb + 1;
 	if((unsigned long long)zoneReg.Write_Pointer + blockCount > (unsigned long long)zoneReg.SLBA + NVME_BLOCKS_PER_ZONE)
 	{
-		ZnsAbortNvmeIo(cmdSlotTag, SCT_COMMAND_SPECIFIC_STATUS, SC_ZONED_BOUNDARY_ERROR, 1);
+		ZnsAbortNvmeIo(cmdSlotTag, ZnsNvmeCmdEpoch(cmdSlotTag), SCT_COMMAND_SPECIFIC_STATUS, SC_ZONED_BOUNDARY_ERROR, 1);
 		return;
 	}
 

@@ -103,7 +103,7 @@ void ReqTransNvmeToSlice(unsigned int cmdSlotTag, unsigned int startLba, unsigne
 			unsigned char sct, sc, dnr;
 			if(zoneID < 0 || zoneID >= MAXIMUM_ACTIVE_ZONE_COUNT){
 				xil_printf("Zone Reg ID Error: %d\r\n", zoneID);
-				ZnsAbortNvmeIo(cmdSlotTag, SCT_GENERIC_COMMAND_STATUS, SC_LBA_OUT_OF_RANGE, 1);
+				ZnsAbortNvmeIo(cmdSlotTag, ZnsNvmeCmdEpoch(cmdSlotTag), SCT_GENERIC_COMMAND_STATUS, SC_LBA_OUT_OF_RANGE, 1);
 				return;
 			}
 
@@ -111,7 +111,7 @@ void ReqTransNvmeToSlice(unsigned int cmdSlotTag, unsigned int startLba, unsigne
 				P_ZONE_MAP admittedZoneMap;
 
 				if(ZoneWriteCheck(zoneID, startLba, requestedNvmeBlock, &sct, &sc, &dnr) != 0){
-					ZnsAbortNvmeIo(cmdSlotTag, sct, sc, dnr);
+					ZnsAbortNvmeIo(cmdSlotTag, ZnsNvmeCmdEpoch(cmdSlotTag), sct, sc, dnr);
 					return;
 				}
 				admittedZoneMap = (P_ZONE_MAP)ZONE_MAP_ADDR;
@@ -127,14 +127,14 @@ void ReqTransNvmeToSlice(unsigned int cmdSlotTag, unsigned int startLba, unsigne
 			}
 			else if(cmdCode == IO_NVM_READ){
 				if(ZoneReadCheck(zoneID, startLba, requestedNvmeBlock, &sct, &sc, &dnr) < 0){
-					ZnsAbortNvmeIo(cmdSlotTag, sct, sc, dnr);
+					ZnsAbortNvmeIo(cmdSlotTag, ZnsNvmeCmdEpoch(cmdSlotTag), sct, sc, dnr);
 					return;
 				}
 				reqCode = REQ_CODE_ZONE_READ;
 			}
 			else{
 				assert(!"[WARNING] Not supported command code [WARNING]");
-				ZnsAbortNvmeIo(cmdSlotTag, SCT_GENERIC_COMMAND_STATUS, SC_INVALID_COMMAND_OPCODE, 1);
+				ZnsAbortNvmeIo(cmdSlotTag, ZnsNvmeCmdEpoch(cmdSlotTag), SCT_GENERIC_COMMAND_STATUS, SC_INVALID_COMMAND_OPCODE, 1);
 				return;
 			}
 
@@ -487,6 +487,8 @@ unsigned int UpdateRowAddrDepTableForBufBlockedReq(unsigned int reqSlotTag)
 
 
 
+static void DiscardNvmeDmaReq(unsigned int reqSlotTag);
+
 void SelectLowLevelReqQ(unsigned int reqSlotTag)
 {
 	unsigned int dieNo, chNo, wayNo, bufDepCheckReport, rowAddrDepCheckReport, rowAddrDepTableUpdateReport;
@@ -496,8 +498,14 @@ void SelectLowLevelReqQ(unsigned int reqSlotTag)
 	{
 		if(reqPoolPtr->reqPool[reqSlotTag].reqType  == REQ_TYPE_NVME_DMA)
 		{
-			IssueNvmeDmaReq(reqSlotTag);
-			PutToNvmeDmaReqQ(reqSlotTag);
+			if(ZnsHostCmdIsInactive(reqPoolPtr->reqPool[reqSlotTag].nvmeCmdSlotTag,
+				reqPoolPtr->reqPool[reqSlotTag].reqOpt.nvmeCmdEpoch))
+				DiscardNvmeDmaReq(reqSlotTag);
+			else
+			{
+				IssueNvmeDmaReq(reqSlotTag);
+				PutToNvmeDmaReqQ(reqSlotTag);
+			}
 		}
 		else if(reqPoolPtr->reqPool[reqSlotTag].reqType  == REQ_TYPE_NAND)
 		{
@@ -588,8 +596,14 @@ void ReleaseBlockedByBufDepReq(unsigned int reqSlotTag)
 
 		if(reqPoolPtr->reqPool[targetReqSlotTag].reqType == REQ_TYPE_NVME_DMA)
 		{
-			IssueNvmeDmaReq(targetReqSlotTag);
-			PutToNvmeDmaReqQ(targetReqSlotTag);
+			if(ZnsHostCmdIsInactive(reqPoolPtr->reqPool[targetReqSlotTag].nvmeCmdSlotTag,
+				reqPoolPtr->reqPool[targetReqSlotTag].reqOpt.nvmeCmdEpoch))
+				DiscardNvmeDmaReq(targetReqSlotTag);
+			else
+			{
+				IssueNvmeDmaReq(targetReqSlotTag);
+				PutToNvmeDmaReqQ(targetReqSlotTag);
+			}
 		}
 		else if(reqPoolPtr->reqPool[targetReqSlotTag].reqType  == REQ_TYPE_NAND)
 		{
@@ -619,6 +633,28 @@ void ReleaseBlockedByBufDepReq(unsigned int reqSlotTag)
 				assert(!"[WARNING] Not supported reqOpt [WARNING]");
 		}
 	}
+}
+
+static void DiscardNvmeDmaReq(unsigned int reqSlotTag)
+{
+	/* Both callers (SelectLowLevelReqQ after buf-dep PASS, and
+	   ReleaseBlockedByBufDepReq after SelectiveGetFromBlockedByBufDepReqQ)
+	   require REQ_QUEUE_TYPE_NONE. Unexpected ownership must stay intact
+	   so the request remains diagnosable on its original queue. */
+	if(reqPoolPtr->reqPool[reqSlotTag].reqQueueType != REQ_QUEUE_TYPE_NONE)
+	{
+		xil_printf("DiscardNvmeDmaReq unexpected qtype req=%u q=%u t=%u c=%u cmd=%u ep=%u\r\n",
+			reqSlotTag,
+			reqPoolPtr->reqPool[reqSlotTag].reqQueueType,
+			reqPoolPtr->reqPool[reqSlotTag].reqType,
+			reqPoolPtr->reqPool[reqSlotTag].reqCode,
+			reqPoolPtr->reqPool[reqSlotTag].nvmeCmdSlotTag,
+			reqPoolPtr->reqPool[reqSlotTag].reqOpt.nvmeCmdEpoch);
+		return;
+	}
+
+	ReleaseBlockedByBufDepReq(reqSlotTag);
+	PutToFreeReqQ(reqSlotTag);
 }
 
 

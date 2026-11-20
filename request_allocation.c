@@ -374,8 +374,8 @@ void SelectiveGetFromNvmeDmaReqQ(unsigned int reqSlotTag)
 	reqPoolPtr->reqPool[reqSlotTag].reqQueueType = REQ_QUEUE_TYPE_NONE;
 	nvmeDmaReqQ.reqCnt--;
 
-	PutToFreeReqQ(reqSlotTag);
 	ReleaseBlockedByBufDepReq(reqSlotTag);
+	PutToFreeReqQ(reqSlotTag);
 }
 
 void PutToNandReqQ(unsigned int reqSlotTag, unsigned chNo, unsigned wayNo)
@@ -423,6 +423,6 @@ void GetFromNandReqQ(unsigned int chNo, unsigned int wayNo, unsigned int reqStat
 	nandReqQ[chNo][wayNo].reqCnt--;
 	notCompletedNandReqCnt--;
 
-	PutToFreeReqQ(reqSlotTag);
 	ReleaseBlockedByBufDepReq(reqSlotTag);
+	PutToFreeReqQ(reqSlotTag);
 }
