@@ -16,7 +16,7 @@
 
 #define SLICE_PER_STRIPE									(NUM_OF_DIE_PER_ZONE)
 
-#define MAXIMUM_OPEN_ZONE_COUNT                  			20
+#define MAXIMUM_OPEN_ZONE_COUNT                  			100
 #define MAXIMUM_ACTIVE_ZONE_COUNT                  			100
 #define ZNS_LBA_START_NVME_BLOCK							0			// zone 0 starts at host LBA 0
 

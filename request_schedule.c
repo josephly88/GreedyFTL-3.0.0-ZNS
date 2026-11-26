@@ -764,6 +764,8 @@ unsigned int GenerateDataBufAddr(unsigned int reqSlotTag)
 	{
 		if(reqPoolPtr->reqPool[reqSlotTag].reqOpt.dataBufFormat == REQ_OPT_DATA_BUF_ENTRY)
 			return (DATA_BUFFER_BASE_ADDR + reqPoolPtr->reqPool[reqSlotTag].dataBufInfo.entry * BYTES_PER_DATA_REGION_OF_SLICE + reqPoolPtr->reqPool[reqSlotTag].nvmeDmaInfo.nvmeBlockOffset * BYTES_PER_NVME_BLOCK);
+		else if(reqPoolPtr->reqPool[reqSlotTag].reqOpt.dataBufFormat == REQ_OPT_DATA_BUF_ADDR)
+			return (reqPoolPtr->reqPool[reqSlotTag].dataBufInfo.addr + reqPoolPtr->reqPool[reqSlotTag].nvmeDmaInfo.nvmeBlockOffset * BYTES_PER_NVME_BLOCK);
 		else
 			assert(!"[WARNING] wrong reqOpt-dataBufFormat [WARNING]");
 	}

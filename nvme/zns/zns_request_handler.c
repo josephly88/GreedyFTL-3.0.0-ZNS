@@ -897,6 +897,7 @@ static void ZnsAbortSliceReq(unsigned int reqSlotTag, unsigned char sct, unsigne
 
 void ZNS_ReqTransSliceToLowLevel(unsigned int reqSlotTag){
     unsigned int zoneID, dataBufEntry;
+	unsigned int useDedicatedZeroBuf = 0;
 
 	zoneID = Lsa2ZoneId(reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr);
 
@@ -957,32 +958,44 @@ void ZNS_ReqTransSliceToLowLevel(unsigned int reqSlotTag){
 		{
 			unsigned int virtualSliceAddr;
 
-			dataBufEntry = AllocateZnsReadRingBuf();
-			if(dataBufEntry == DATA_BUF_FAIL)
-			{
-				ZnsAbortSliceReq(reqSlotTag, SCT_GENERIC_COMMAND_STATUS, SC_INTERNAL_DEVICE_ERROR, 1);
-				return;
-			}
-
-			reqPoolPtr->reqPool[reqSlotTag].dataBufInfo.entry = dataBufEntry;
-			dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr = reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr;
-
 			virtualSliceAddr = ZNS_AddrTransRead(reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr);
-			if(virtualSliceAddr != VSA_FAIL)
-				ZNS_DataReadFromNand(zoneID, reqSlotTag);
+			if(virtualSliceAddr == VSA_FAIL)
+			{
+				useDedicatedZeroBuf = 1;
+				reqPoolPtr->reqPool[reqSlotTag].reqCode = REQ_CODE_TxDMA;
+			}
 			else
-				memset((void *)(DATA_BUFFER_BASE_ADDR + dataBufEntry * BYTES_PER_DATA_REGION_OF_SLICE), 0, BYTES_PER_DATA_REGION_OF_SLICE);
+			{
+				dataBufEntry = AllocateZnsReadRingBuf();
+				if(dataBufEntry == DATA_BUF_FAIL)
+				{
+					ZnsAbortSliceReq(reqSlotTag, SCT_GENERIC_COMMAND_STATUS, SC_INTERNAL_DEVICE_ERROR, 1);
+					return;
+				}
 
-			reqPoolPtr->reqPool[reqSlotTag].reqCode = REQ_CODE_TxDMA;
+				reqPoolPtr->reqPool[reqSlotTag].dataBufInfo.entry = dataBufEntry;
+				dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr = reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr;
+
+				ZNS_DataReadFromNand(zoneID, reqSlotTag);
+				reqPoolPtr->reqPool[reqSlotTag].reqCode = REQ_CODE_TxDMA;
+			}
 		}
 	}
 	else
 		assert(!"[WARNING] Not supported reqCode. [WARNING]");
 
 	reqPoolPtr->reqPool[reqSlotTag].reqType = REQ_TYPE_NVME_DMA;
-	reqPoolPtr->reqPool[reqSlotTag].reqOpt.dataBufFormat = REQ_OPT_DATA_BUF_ENTRY;
-
-	UpdateDataBufEntryInfoBlockingReq(dataBufEntry, reqSlotTag);
+	if(useDedicatedZeroBuf)
+	{
+		reqPoolPtr->reqPool[reqSlotTag].reqOpt.dataBufFormat = REQ_OPT_DATA_BUF_ADDR;
+		reqPoolPtr->reqPool[reqSlotTag].dataBufInfo.addr = ZNS_UNWRITTEN_ZERO_BUF_ADDR;
+		reqPoolPtr->reqPool[reqSlotTag].prevBlockingReq = REQ_SLOT_TAG_NONE;
+	}
+	else
+	{
+		reqPoolPtr->reqPool[reqSlotTag].reqOpt.dataBufFormat = REQ_OPT_DATA_BUF_ENTRY;
+		UpdateDataBufEntryInfoBlockingReq(dataBufEntry, reqSlotTag);
+	}
 	SelectLowLevelReqQ(reqSlotTag);
 }
 
