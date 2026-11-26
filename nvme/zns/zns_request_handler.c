@@ -18,9 +18,15 @@ P_ZONE_WRITE_BUFFER_MAP zoneWriteBufMapPtr;
 P_UNI_BUF_REG uniBufRegPtr;
 P_WRR wrrPtr;
 
-// Bad block tuples (Assume the tuples are sorted and not overlapped)
-// {4052, 4057} means virtual blocks 4052 - 4057 are bad blocks
-int BadBlockTuples[] = {4052, 4053, 4064, 4065, 4074, 4075};
+// Bad block tuples:
+// {virtualBlockStart, virtualBlockEnd, channel, way}
+//
+// Both virtual block range endpoints are inclusive.
+int BadBlockTuples[][4] = {
+	{4052, 4053, 1, 5},
+	{4064, 4065, 1, 5},
+	{4074, 4075, 1, 5}
+};
 
 #define ZNS_APPEND_SLOT_COUNT	(1u << P_SLOT_TAG_WIDTH)
 
@@ -256,23 +262,36 @@ void eliminateBadBlockGroups(){
 		}
 	}
 
-	int BadBlockTuplesSize = (sizeof(BadBlockTuples)/sizeof(int));
-	if(BadBlockTuplesSize % 2 == 1)
-		assert(!"[Error] BadBlockTuples: The length must be even number [Error]");
+	int BadBlockTuplesSize = (sizeof(BadBlockTuples) / sizeof(BadBlockTuples[0]));
 
-	for(baditv = 0; baditv < BadBlockTuplesSize; baditv += 2){
-		int badblk;
-		for(badblk = BadBlockTuples[baditv]; badblk <= BadBlockTuples[baditv+1]; badblk++){
-			// Skip the bad block tuples that are smaller than the start of the zone
-			if(badblk < ZONE_BLOCK_GROUP_START)
-				continue;
-			// Calculate the block group that bad block belongs to
-			int BG_row = (badblk / 64) / NUM_OF_BLOCK_PER_ZONE;
-			int BG_column = (badblk % 64) / NUM_OF_DIE_PER_ZONE;
-			int BG = BG_row * (64/NUM_OF_DIE_PER_ZONE) + BG_column;
+	for(baditv = 0; baditv < BadBlockTuplesSize; baditv++){
+		int startBlock, endBlock, chNo, wayNo, dieNo, virtualBlock;
+
+		startBlock = BadBlockTuples[baditv][0];
+		endBlock = BadBlockTuples[baditv][1];
+		chNo = BadBlockTuples[baditv][2];
+		wayNo = BadBlockTuples[baditv][3];
+
+		if(startBlock > endBlock)
+			assert(!"[Error] BadBlockTuples: startBlock must be <= endBlock [Error]");
+		if((startBlock < 0) || (endBlock >= (int)USER_BLOCKS_PER_DIE))
+			assert(!"[Error] BadBlockTuples: virtual block range is out of range [Error]");
+		if((chNo < 0) || (chNo >= (int)USER_CHANNELS) || (wayNo < 0) || (wayNo >= (int)USER_WAYS))
+			assert(!"[Error] BadBlockTuples: channel or way is out of range [Error]");
+
+		dieNo = Pcw2VdieTranslation(chNo, wayNo);
+		if(dieNo >= USER_DIES)
+			assert(!"[Error] BadBlockTuples: die index is out of range [Error]");
+
+		for(virtualBlock = startBlock; virtualBlock <= endBlock; virtualBlock++){
+			int BG;
+
+			BG = (virtualBlock / NUM_OF_BLOCK_PER_ZONE) * BLOCK_GROUP_IN_COLUMN
+				+ (dieNo / NUM_OF_DIE_PER_ZONE);
+			if((BG < 0) || (BG >= (int)BLOCK_GROUP_PER_SSD))
+				assert(!"[Error] BadBlockTuples: block group is out of range [Error]");
 
 			validBlockGroupFifoPtr->FIFO_LIST[BG] = -1;
-			//xil_printf("Bad Block %d is found in Block Group %d\r\n", badblk, BG);
 		}
 	}
 
