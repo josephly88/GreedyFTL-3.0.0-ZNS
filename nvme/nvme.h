@@ -76,6 +76,7 @@
 #define ADMIN_ASYNCHRONOUS_EVENT_REQUEST					0x0C
 #define ADMIN_FIRMWARE_ACTIVATE								0x10
 #define ADMIN_FIRMWARE_IMAGE_DOWNLOAD						0x11
+#define ADMIN_DOORBELL_BUFFER_CONFIG						0x7C
 #define ADMIN_FORMAT_NVM									0x80
 #define ADMIN_SECURITY_SEND									0x81
 #define ADMIN_SECURITY_RECEIVE								0x82
@@ -157,6 +158,7 @@
 #define SC_NAMESPACE_NOT_ATTACHED								0x1A//Namespace Attachment
 #define SC_THIN_PROVISIONING_NOT_SUPPORTED						0x1B//Namespace Management
 #define SC_CONTROLLER_LIST_INVALID								0x1C//Namespace Attachment
+#define SC_INVALID_IO_COMMAND_SET								0x2C//Identify, Namespace Management
 
 /*Status Code - Command Specific Status Values, NVM Command Set */
 #define SC_CONFLICTING_ATTRIBUTES							0x80//Dataset Management, Read, Write
@@ -187,6 +189,8 @@
 #define INTERRUPT_VECTOR_CONFIGURATION						0x09
 #define WRITE_ATOMICITY										0x0A
 #define ASYNCHRONOUS_EVENT_CONFIGURATION					0x0B
+#define Power_State_Transition								0x0C
+#define Timestamp											0x0E
 #define SOFTWARE_PROGRESS_MARKER							0x80
 
 
@@ -232,6 +236,17 @@ typedef struct _NVME_ADMIN_COMMAND
 		};
 	};
 }NVME_ADMIN_COMMAND;
+
+typedef struct _ADMIN_SET_FEATURES_NUMBER_OF_QUEUES_COMPLETE
+{
+	union {
+		unsigned int dword;
+		struct {
+			unsigned short NCQA;//zero-based value
+			unsigned short NSQA;//zero-based value
+		};
+	};
+} ADMIN_SET_FEATURES_NUMBER_OF_QUEUES_COMPLETE;
 
 typedef struct _NVME_IO_COMMAND
 {
@@ -478,7 +493,19 @@ typedef struct _ADMIN_IDENTIFY_CONTROLLER
 	unsigned char CMIC;
 	unsigned char MDTS;
 	unsigned short CNTLID;
-	unsigned char reserved0[176];
+	unsigned int VER;
+	unsigned int RTD3R;
+	unsigned int RTD3E;
+	unsigned int OAES;
+	unsigned int CTRATT;
+	unsigned short RRLS;
+	unsigned char reserved102[9];
+	unsigned char CNTRLTYPE;
+	unsigned char FGUID[16];
+	unsigned short CRDT1;
+	unsigned short CRDT2;
+	unsigned short CRDT3;
+	unsigned char reserved134[122];
 
 	struct
 	{
@@ -589,6 +616,10 @@ typedef struct _ADMIN_IDENTIFY_CONTROLLER
 
 } ADMIN_IDENTIFY_CONTROLLER;
 
+typedef char admin_id_oacs_at_256[((unsigned int)__builtin_offsetof(ADMIN_IDENTIFY_CONTROLLER, OACS) == 256) ? 1 : -1];
+typedef char admin_id_sqes_at_512[((unsigned int)__builtin_offsetof(ADMIN_IDENTIFY_CONTROLLER, SQES) == 512) ? 1 : -1];
+typedef char admin_id_nn_at_516[((unsigned int)__builtin_offsetof(ADMIN_IDENTIFY_CONTROLLER, NN) == 516) ? 1 : -1];
+
 
 /* Identify - LBA Format Data Structure */
 typedef struct _ADMIN_IDENTIFY_FORMAT_DATA
@@ -673,12 +704,17 @@ typedef struct _ADMIN_IDENTIFY_NAMESPACE
 
 } ADMIN_IDENTIFY_NAMESPACE;
 
+/* Identify Active Namespace Data Structure */
+typedef struct _ADMIN_IDENTIFY_ACTIVE_NAMESPACE
+{
+    unsigned int active_namespace[1024];
+} ADMIN_IDENTIFY_ACTIVE_NAMESPACE;
+
 typedef struct _ADMIN_IDENTIFY_4096B
 {
 	unsigned int id0;
 	unsigned char reserved0[4092];
 } ADMIN_IDENTIFY_4096B;
-
 
 /* IO Write Command */
 typedef struct _IO_WRITE_COMMAND_DW12
@@ -837,6 +873,8 @@ typedef struct _NVME_STATUS
 	unsigned int status;
 	unsigned int cacheEn;
 	NVME_ADMIN_QUEUE_STATUS adminQueueInfo;
+	unsigned short numOfIOSubmissionQueuesAllocated;//non zero-based value
+	unsigned short numOfIOCompletionQueuesAllocated;//non zero-based value
 	NVME_IO_SQ_STATUS ioSqInfo[MAX_NUM_OF_IO_SQ];
 	NVME_IO_CQ_STATUS ioCqInfo[MAX_NUM_OF_IO_CQ];
 } NVME_CONTEXT;

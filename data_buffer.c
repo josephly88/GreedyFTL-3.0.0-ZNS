@@ -46,6 +46,7 @@
 
 #include "xil_printf.h"
 #include <assert.h>
+#include <string.h>
 #include "memory_map.h"
 
 
@@ -106,7 +107,9 @@ void InitDataBuf()
 		dataBufMapPtr->dataBuf[bufEntry].hashPrevEntry = DATA_BUF_NONE;
 		dataBufMapPtr->dataBuf[bufEntry].hashNextEntry = DATA_BUF_NONE;
 	}
-}	
+
+	memset((void *)ZNS_UNWRITTEN_ZERO_BUF_ADDR, 0, ZNS_UNWRITTEN_ZERO_BUF_SIZE);
+}
 
 unsigned int CheckDataBufHit(unsigned int reqSlotTag)
 {

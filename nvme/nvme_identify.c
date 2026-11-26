@@ -56,6 +56,7 @@
 #include "nvme.h"
 #include "nvme_identify.h"
 #include "../ftl_config.h"
+#include "zns/zns.h"
 
 void identify_controller(unsigned int pBuffer)
 {
@@ -86,6 +87,9 @@ void identify_controller(unsigned int pBuffer)
 	identifyCNTL->CMIC = 0x0;
 	identifyCNTL->MDTS = 0x8;
 	identifyCNTL->CNTLID = 0x9;
+	identifyCNTL->VER = 0x00020000;
+	identifyCNTL->CTRATT = 0;
+	identifyCNTL->CNTRLTYPE = 1;
 
 	identifyCNTL->OACS.supportsSecuritySendSecurityReceive = 0x0;
 	identifyCNTL->OACS.supportsFormatNVM = 0x0;
@@ -98,6 +102,7 @@ void identify_controller(unsigned int pBuffer)
 	identifyCNTL->FRMW.supportedNumberOfFirmwareSlots = 0x1;
 
 	identifyCNTL->LPA.supportsSMARTHealthInformationLogPage = 0x0;
+	identifyCNTL->LPA.suppottsCommandEffectsLogPage = 0x1;
 
 	identifyCNTL->ELPE = 0x8;
 	identifyCNTL->NPSS = 0x0;
@@ -110,7 +115,7 @@ void identify_controller(unsigned int pBuffer)
 	identifyCNTL->CQES.requiredCompletionQueueEntrySize = 0x4;
 	identifyCNTL->CQES.maximumCompletionQueueEntrySize = 0x4;
 
-	identifyCNTL->NN = 0x1;
+	identifyCNTL->NN = NUM_REPORTED_NVME_NAMESPACES;
 
 	identifyCNTL->ONCS.supportsCompare = 0x0;
 	identifyCNTL->ONCS.supportsWriteUncorrectable = 0x0;
@@ -197,14 +202,35 @@ void identify_namespace(unsigned int pBuffer)
 	formatData->RP = 0x2;
 }
 
-void identify_namespace_list(unsigned int pBuffer)
+void identify_active_namespace(unsigned int pBuffer)
 {
-	ADMIN_IDENTIFY_4096B *identify4096B;
-	identify4096B = (ADMIN_IDENTIFY_4096B*)pBuffer;
+    ADMIN_IDENTIFY_ACTIVE_NAMESPACE *identifyNS;
+    int i = 0;
 
-	memset(identify4096B, 0, sizeof(ADMIN_IDENTIFY_4096B));
+    identifyNS = (ADMIN_IDENTIFY_ACTIVE_NAMESPACE *)pBuffer;
+    memset(identifyNS, 0, sizeof(ADMIN_IDENTIFY_ACTIVE_NAMESPACE));
 
-	identify4096B->id0 = 0x1;
+    for(i = 0; i < NUM_REPORTED_NVME_NAMESPACES; i++)
+    {
+        identifyNS->active_namespace[i] = i + 1;
+    }
+}
+
+void identify_io_command_set_namespace(unsigned int pBuffer)
+{
+	unsigned char *p = (unsigned char *)pBuffer;
+
+	memset(p, 0, 4096);
+
+	/* Namespace Identifier Descriptor: NIDT = Command Set Identifier (04h) */
+	p[0] = 0x04;
+	p[1] = 0x01;
+#if ZNS_IO_COMMAND_SET
+	p[4] = 0x02; /* Zoned Namespace command set (CSI 2) */
+#else
+	p[4] = 0x00; /* NVM command set (CSI 0) */
+#endif
+	/* NIDT = 0 at p[5]: end of descriptor list */
 }
 
 void identify_command_set(unsigned int pBuffer)
@@ -213,8 +239,6 @@ void identify_command_set(unsigned int pBuffer)
 	identify4096B = (ADMIN_IDENTIFY_4096B*)pBuffer;
 
 	memset(identify4096B, 0, sizeof(ADMIN_IDENTIFY_4096B));
-
-	identify4096B->id0 = 0x2;
 }
 
 void identify_zns_command_set(unsigned int pBuffer)
@@ -224,13 +248,13 @@ void identify_zns_command_set(unsigned int pBuffer)
 
 	memset(identifyZnsCmdSet, 0, sizeof(ADMIN_IDENTIFY_ZNS_COMMAND_SET));
 
-	// Maximum Active Resource
-	identifyZnsCmdSet->MAR = 1;
-	// Maximun Open Resource
-	identifyZnsCmdSet->MOR = 1;
-
-	// Zone Size
-	identifyZnsCmdSet->LBAFE[0].ZSZE = 1;
+	/* 0's-based resource limits. Linux 5.15 uses advertised + 1. */
+	identifyZnsCmdSet->ZOC = 0;
+	identifyZnsCmdSet->OZCS = 0;
+	identifyZnsCmdSet->MAR = MAXIMUM_ACTIVE_ZONE_COUNT - 1;
+	identifyZnsCmdSet->MOR = MAXIMUM_OPEN_ZONE_COUNT - 1;
+	identifyZnsCmdSet->LBAFE[0].ZSZE = NVME_BLOCKS_PER_ZONE;
+	identifyZnsCmdSet->LBAFE[0].ZDES = 0;
 }
 
 void identify_controller_ioset(unsigned int pBuffer)

@@ -50,6 +50,7 @@
 #include "xil_printf.h"
 #include "memory_map.h"
 #include "nvme/debug.h"
+#include "nvme/zns/zns_request_handler.h"
 
 P_COMPLETE_FLAG_TABLE completeFlagTablePtr;
 P_STATUS_REPORT_TABLE statusReportTablePtr;
@@ -763,6 +764,8 @@ unsigned int GenerateDataBufAddr(unsigned int reqSlotTag)
 	{
 		if(reqPoolPtr->reqPool[reqSlotTag].reqOpt.dataBufFormat == REQ_OPT_DATA_BUF_ENTRY)
 			return (DATA_BUFFER_BASE_ADDR + reqPoolPtr->reqPool[reqSlotTag].dataBufInfo.entry * BYTES_PER_DATA_REGION_OF_SLICE + reqPoolPtr->reqPool[reqSlotTag].nvmeDmaInfo.nvmeBlockOffset * BYTES_PER_NVME_BLOCK);
+		else if(reqPoolPtr->reqPool[reqSlotTag].reqOpt.dataBufFormat == REQ_OPT_DATA_BUF_ADDR)
+			return (reqPoolPtr->reqPool[reqSlotTag].dataBufInfo.addr + reqPoolPtr->reqPool[reqSlotTag].nvmeDmaInfo.nvmeBlockOffset * BYTES_PER_NVME_BLOCK);
 		else
 			assert(!"[WARNING] wrong reqOpt-dataBufFormat [WARNING]");
 	}
@@ -947,6 +950,11 @@ void ExecuteNandReq(unsigned int chNo, unsigned int wayNo, unsigned int reqStatu
 				//grown bad block information update
 				phyBlockNo = ((rowAddr % LUN_1_BASE_ADDR) / PAGES_PER_MLC_BLOCK) + ((rowAddr / LUN_1_BASE_ADDR)* TOTAL_BLOCKS_PER_LUN);
 				UpdatePhyBlockMapForGrownBadBlock(Pcw2VdieTranslation(chNo, wayNo), phyBlockNo);
+
+				if((reqPoolPtr->reqPool[reqSlotTag].reqCode == REQ_CODE_READ) || (reqPoolPtr->reqPool[reqSlotTag].reqCode == REQ_CODE_READ_TRANSFER))
+					if(reqPoolPtr->reqPool[reqSlotTag].reqOpt.hostNvmeRead)
+						if(ZnsMarkHostReadFailed(reqPoolPtr->reqPool[reqSlotTag].nvmeCmdSlotTag, reqPoolPtr->reqPool[reqSlotTag].reqOpt.nvmeCmdEpoch))
+							ZnsAbortNvmeIo(reqPoolPtr->reqPool[reqSlotTag].nvmeCmdSlotTag, SCT_MEDIA_AND_DATA_INTEGRITY_ERRORS, SC_UNRECOVERED_READ_ERROR, 1);
 
 				retryLimitTablePtr->retryLimit[chNo][wayNo] = RETRY_LIMIT;
 				GetFromNandReqQ(chNo, wayNo, reqStatus, reqPoolPtr->reqPool[reqSlotTag].reqCode);

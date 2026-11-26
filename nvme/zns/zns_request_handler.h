@@ -7,6 +7,24 @@ void InitZNS();
 
 void ZnsAbortNvmeIo(unsigned int cmdSlotTag, unsigned char sct, unsigned char sc, unsigned char dnr);
 
+void ZnsBeginNvmeCmd(unsigned int cmdSlotTag);
+
+unsigned char ZnsNvmeCmdEpoch(unsigned int cmdSlotTag);
+
+int ZnsMarkHostReadFailed(unsigned int cmdSlotTag, unsigned char epoch);
+
+int ZnsHostReadAutoCplOff(unsigned int cmdSlotTag, unsigned char epoch);
+
+unsigned short ZnsStatusWord(unsigned char sct, unsigned char sc, unsigned char dnr);
+
+void ZnsAppendArm(unsigned int cmdSlotTag, unsigned int assignedLba);
+
+void ZnsAppendNoteSlice(unsigned int cmdSlotTag);
+
+int ZnsAppendIsActive(unsigned int cmdSlotTag);
+
+void ZnsAppendOnRxDmaDone(unsigned int cmdSlotTag);
+
 void parameterCheck();
 
 void resetZoneReg(int ZoneRegID);
@@ -37,6 +55,7 @@ int wrr_select_zone_probability();
 
 int weighted_buffer_size(int zoneID);
 
+/* 0: admitted. -1: rejected, with sct/sc/dnr set. Does not return Buffer_ID. */
 int ZoneWriteCheck(unsigned int zoneID, unsigned int slba, unsigned int nlb,
 	unsigned char *sct, unsigned char *sc, unsigned char *dnr);
 
@@ -51,13 +70,15 @@ unsigned int CheckPartialSliceWriteBuf(unsigned int reqSlotTag, unsigned int zon
 
 unsigned int CheckUnevictedSliceBuf(unsigned int reqSlotTag, unsigned int zoneID);
 
+void ZnsProgramFinishedDirtyBufs(unsigned int zoneID);
+
 void ZNS_ReqTransSliceToLowLevel(unsigned int reqSlotTag);
 
 unsigned int ZNS_AllocateWriteDataBuf(unsigned int zoneID, unsigned int reqSlotTag);
 
 void ZNS_EvictDataBufEntry(unsigned int zoneID, unsigned int originReqSlotTag);
 
-void ZNS_EvictAllDataBufEntry(unsigned int zoneID, unsigned int originReqSlotTag);
+void ZNS_EvictAllDataBufEntry(unsigned int zoneID);
 
 void ZNS_DataReadFromNand(unsigned int zoneID, unsigned int originReqSlotTag);
 

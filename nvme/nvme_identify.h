@@ -55,11 +55,16 @@
 #define MODEL_NUMBER				"Cosmos+ OpenSSD"
 #define FIRMWARE_REVISION			"TYPE0005"
 
+/* Host-visible namespaces (FTL still uses all USER_CHANNELS internally) */
+#define NUM_REPORTED_NVME_NAMESPACES		1
+
 void identify_controller(unsigned int pBuffer);
 
 void identify_namespace(unsigned int pBuffer);
 
-void identify_namespace_list(unsigned int pBuffer);
+void identify_active_namespace(unsigned int pBuffer);
+
+void identify_io_command_set_namespace(unsigned int pBuffer);
 
 void identify_command_set(unsigned int pBuffer);
 

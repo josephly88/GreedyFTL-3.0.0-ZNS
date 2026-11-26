@@ -98,6 +98,7 @@ void dev_irq_handler()
 		PCIE_STATUS_REG pcieReg;
 		pcieReg.dword = IO_READ32(PCIE_STATUS_REG_ADDR);
 		xil_printf("PCIe Link: %d\r\n", pcieReg.pcieLinkUp);
+		// set_link_width(0) //you can choose pcie lane width 0,2,4,8 mini board -> maximum 4, cosmos+ board -> maximum 8
 		if(pcieReg.pcieLinkUp == 0)
 			g_nvmeTask.status = NVME_TASK_RESET;
 	}
@@ -182,6 +183,27 @@ unsigned int check_nvme_cc_en()
 	return (unsigned int)nvmeReg.ccEn;
 }
 
+void pcie_async_reset(unsigned int rstCnt)
+{
+	NVME_STATUS_REG nvmeReg;
+
+	nvmeReg.rstCnt = rstCnt;
+	xil_printf("rstCnt= %X \r\n",rstCnt);
+	IO_WRITE32(NVME_STATUS_REG_ADDR, nvmeReg.dword);
+
+}
+
+void set_link_width(unsigned int linkNum)
+{
+	NVME_STATUS_REG nvmeReg;
+
+	nvmeReg.linkNum = linkNum;
+	nvmeReg.linkEn = 1;
+	xil_printf("linkNum= %X \r\n",linkNum);
+	IO_WRITE32(NVME_STATUS_REG_ADDR, nvmeReg.dword);
+
+}
+
 void set_nvme_csts_rdy(unsigned int rdy)
 {
 	NVME_STATUS_REG nvmeReg;
@@ -228,6 +250,7 @@ unsigned int get_nvme_cmd(unsigned short *qID, unsigned short *cmdSlotTag, unsig
 		*qID = nvmeReg.qID;
 		*cmdSlotTag = nvmeReg.cmdSlotTag;
 		*cmdSeqNum = nvmeReg.cmdSeqNum;
+		//xil_printf("nvmeReg.cmdSlotTag = 0x%X\r\n", nvmeReg.cmdSlotTag);
 
 		addr = NVME_CMD_SRAM_ADDR + (nvmeReg.cmdSlotTag * 64);
 		for(idx = 0; idx < 16; idx++)
@@ -258,7 +281,7 @@ void set_nvme_slot_release(unsigned int cmdSlotTag)
 	nvmeReg.cmdSlotTag = cmdSlotTag;
 	nvmeReg.cplType = CMD_SLOT_RELEASE_TYPE;
 
-	IO_WRITE32(NVME_CPL_FIFO_REG_ADDR, nvmeReg.dword[0]);
+	//IO_WRITE32(NVME_CPL_FIFO_REG_ADDR, nvmeReg.dword[0]);
 	//IO_WRITE32((NVME_CPL_FIFO_REG_ADDR + 4), nvmeReg.dword[1]);
 	IO_WRITE32((NVME_CPL_FIFO_REG_ADDR + 8), nvmeReg.dword[2]);
 }
@@ -317,7 +340,7 @@ void set_direct_tx_dma(unsigned int devAddr, unsigned int pcieAddrH, unsigned in
 {
 	HOST_DMA_CMD_FIFO_REG hostDmaReg;
 
-	ASSERT((len <= 0x1000) && (pcieAddrH < 0x10) && ((pcieAddrL & 0xF) == 0));
+	ASSERT((len <= 0x1000) && ((pcieAddrL & 0x3) == 0)); //modified
 	
 	hostDmaReg.devAddr = devAddr;
 	hostDmaReg.pcieAddrL = pcieAddrL;
@@ -328,10 +351,13 @@ void set_direct_tx_dma(unsigned int devAddr, unsigned int pcieAddrH, unsigned in
 	hostDmaReg.dmaDirection = HOST_DMA_TX_DIRECTION;
 	hostDmaReg.dmaLen = len;
 
+	hostDmaReg.cmdSlotTag = 0;
+
 	IO_WRITE32(HOST_DMA_CMD_FIFO_REG_ADDR, hostDmaReg.dword[0]);
 	IO_WRITE32((HOST_DMA_CMD_FIFO_REG_ADDR + 4), hostDmaReg.dword[1]);
 	IO_WRITE32((HOST_DMA_CMD_FIFO_REG_ADDR + 8), hostDmaReg.dword[2]);
 	IO_WRITE32((HOST_DMA_CMD_FIFO_REG_ADDR + 12), hostDmaReg.dword[3]);
+	IO_WRITE32((HOST_DMA_CMD_FIFO_REG_ADDR + 16), hostDmaReg.dword[4]);//slot_modified
 
 
 	g_hostDmaStatus.fifoTail.directDmaTx++;
@@ -342,8 +368,8 @@ void set_direct_rx_dma(unsigned int devAddr, unsigned int pcieAddrH, unsigned in
 {
 	HOST_DMA_CMD_FIFO_REG hostDmaReg;
 
-	ASSERT((len <= 0x1000) && (pcieAddrH < 0x10) && ((pcieAddrL & 0xF) == 0));
-	
+	ASSERT((len <= 0x1000) && ((pcieAddrL & 0x3) == 0)); //modified
+
 	hostDmaReg.devAddr = devAddr;
 	hostDmaReg.pcieAddrH = pcieAddrH;
 	hostDmaReg.pcieAddrL = pcieAddrL;
@@ -352,11 +378,14 @@ void set_direct_rx_dma(unsigned int devAddr, unsigned int pcieAddrH, unsigned in
 	hostDmaReg.dmaType = HOST_DMA_DIRECT_TYPE;
 	hostDmaReg.dmaDirection = HOST_DMA_RX_DIRECTION;
 	hostDmaReg.dmaLen = len;
+	
+	hostDmaReg.cmdSlotTag = 0;
 
 	IO_WRITE32(HOST_DMA_CMD_FIFO_REG_ADDR, hostDmaReg.dword[0]);
 	IO_WRITE32((HOST_DMA_CMD_FIFO_REG_ADDR + 4), hostDmaReg.dword[1]);
 	IO_WRITE32((HOST_DMA_CMD_FIFO_REG_ADDR + 8), hostDmaReg.dword[2]);
 	IO_WRITE32((HOST_DMA_CMD_FIFO_REG_ADDR + 12), hostDmaReg.dword[3]);
+	IO_WRITE32((HOST_DMA_CMD_FIFO_REG_ADDR + 16), hostDmaReg.dword[4]);//slot_modified
 
 	g_hostDmaStatus.fifoTail.directDmaRx++;
 	g_hostDmaStatus.directDmaRxCnt++;
@@ -387,6 +416,7 @@ void set_auto_tx_dma(unsigned int cmdSlotTag, unsigned int cmd4KBOffset, unsigne
 	//IO_WRITE32((HOST_DMA_CMD_FIFO_REG_ADDR + 4), hostDmaReg.dword[1]);
 	//IO_WRITE32((HOST_DMA_CMD_FIFO_REG_ADDR + 8), hostDmaReg.dword[2]);
 	IO_WRITE32((HOST_DMA_CMD_FIFO_REG_ADDR + 12), hostDmaReg.dword[3]);
+	IO_WRITE32((HOST_DMA_CMD_FIFO_REG_ADDR + 16), hostDmaReg.dword[4]);//slot_modified
 
 	tempTail = g_hostDmaStatus.fifoTail.autoDmaTx++;
 	if(tempTail > g_hostDmaStatus.fifoTail.autoDmaTx)
@@ -419,6 +449,7 @@ void set_auto_rx_dma(unsigned int cmdSlotTag, unsigned int cmd4KBOffset, unsigne
 	//IO_WRITE32((HOST_DMA_CMD_FIFO_REG_ADDR + 4), hostDmaReg.dword[1]);
 	//IO_WRITE32((HOST_DMA_CMD_FIFO_REG_ADDR + 8), hostDmaReg.dword[2]);
 	IO_WRITE32((HOST_DMA_CMD_FIFO_REG_ADDR + 12), hostDmaReg.dword[3]);
+	IO_WRITE32((HOST_DMA_CMD_FIFO_REG_ADDR + 16), hostDmaReg.dword[4]);//slot_modified
 
 	tempTail = g_hostDmaStatus.fifoTail.autoDmaRx++;
 	if(tempTail > g_hostDmaStatus.fifoTail.autoDmaRx)

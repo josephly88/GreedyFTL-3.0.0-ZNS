@@ -262,7 +262,13 @@ void InitCurrentBlockOfDieMap()
 	{
 		virtualDieMapPtr->die[dieNo].currentBlock = GetFromFbList(dieNo, GET_FREE_BLOCK_NORMAL);
 		if(virtualDieMapPtr->die[dieNo].currentBlock == BLOCK_FAIL)
-			assert(!"[WARNING] There is no free block [WARNING]");
+		{
+			/* The namespace is entirely zoned, so the conventional free list is empty. */
+			if(ZNS_IO_COMMAND_SET == 1 && ZONE_BLOCK_GROUP_START == 0)
+				virtualDieMapPtr->die[dieNo].currentBlock = BLOCK_NONE;
+			else
+				assert(!"[WARNING] There is no free block [WARNING]");
+		}
 	}
 }
 

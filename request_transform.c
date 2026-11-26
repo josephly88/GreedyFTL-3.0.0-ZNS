@@ -96,7 +96,7 @@ void ReqTransNvmeToSlice(unsigned int cmdSlotTag, unsigned int startLba, unsigne
 		assert(!"[WARNING] Not supported command code [WARNING]");
 
 	if(ZNS_IO_COMMAND_SET){
-		if(startLba >= ZNS_LBA_START_NVME_BLOCK && startLba < ZNS_LBA_END_NVME_BLOCK){
+		if(startLba >= ZNS_LBA_START_NVME_BLOCK && startLba <= ZNS_LBA_END_NVME_BLOCK){
 			//xil_printf("Before: tempLsa = %d\r\n", tempLsa);
 
 			unsigned int zoneID = Lba2ZoneId(startLba);
@@ -108,9 +108,20 @@ void ReqTransNvmeToSlice(unsigned int cmdSlotTag, unsigned int startLba, unsigne
 			}
 
 			if(cmdCode == IO_NVM_WRITE){
-				if(ZoneWriteCheck(zoneID, startLba, requestedNvmeBlock, &sct, &sc, &dnr) < 0){
+				P_ZONE_MAP admittedZoneMap;
+
+				if(ZoneWriteCheck(zoneID, startLba, requestedNvmeBlock, &sct, &sc, &dnr) != 0){
 					ZnsAbortNvmeIo(cmdSlotTag, sct, sc, dnr);
 					return;
+				}
+				admittedZoneMap = (P_ZONE_MAP)ZONE_MAP_ADDR;
+				if(admittedZoneMap->zoneReg[zoneID].Buffer_ID < 0){
+					/* Success already committed the pointer. Completing this command
+					   as a failure would make the host retry the old SLBA. */
+					xil_printf("Zone [%d] admitted without a buffer\r\n", zoneID);
+					assert(!"[Error] Zone write admitted without a buffer [Error]");
+					for(;;)
+						;
 				}
 				reqCode = REQ_CODE_ZONE_WRITE;
 			}
@@ -148,8 +159,15 @@ void ReqTransNvmeToSlice(unsigned int cmdSlotTag, unsigned int startLba, unsigne
 	reqPoolPtr->reqPool[reqSlotTag].nvmeDmaInfo.startIndex = nvmeDmaStartIndex;
 	reqPoolPtr->reqPool[reqSlotTag].nvmeDmaInfo.nvmeBlockOffset = nvmeBlockOffset;
 	reqPoolPtr->reqPool[reqSlotTag].nvmeDmaInfo.numOfNvmeBlock = tempNumOfNvmeBlock;
+	reqPoolPtr->reqPool[reqSlotTag].reqOpt.znsAppend = REQ_OPT_ZNS_APPEND_NONE;
+	reqPoolPtr->reqPool[reqSlotTag].reqOpt.nvmeCmdEpoch = ZnsNvmeCmdEpoch(cmdSlotTag);
 
 	PutToSliceReqQ(reqSlotTag);
+	if(ZnsAppendIsActive(cmdSlotTag))
+	{
+		reqPoolPtr->reqPool[reqSlotTag].reqOpt.znsAppend = REQ_OPT_ZNS_APPEND;
+		ZnsAppendNoteSlice(cmdSlotTag);
+	}
 
 	tempLsa++;
 	transCounter++;
@@ -170,8 +188,15 @@ void ReqTransNvmeToSlice(unsigned int cmdSlotTag, unsigned int startLba, unsigne
 		reqPoolPtr->reqPool[reqSlotTag].nvmeDmaInfo.startIndex = nvmeDmaStartIndex;
 		reqPoolPtr->reqPool[reqSlotTag].nvmeDmaInfo.nvmeBlockOffset = nvmeBlockOffset;
 		reqPoolPtr->reqPool[reqSlotTag].nvmeDmaInfo.numOfNvmeBlock = tempNumOfNvmeBlock;
+		reqPoolPtr->reqPool[reqSlotTag].reqOpt.znsAppend = REQ_OPT_ZNS_APPEND_NONE;
+		reqPoolPtr->reqPool[reqSlotTag].reqOpt.nvmeCmdEpoch = ZnsNvmeCmdEpoch(cmdSlotTag);
 
 		PutToSliceReqQ(reqSlotTag);
+		if(ZnsAppendIsActive(cmdSlotTag))
+		{
+			reqPoolPtr->reqPool[reqSlotTag].reqOpt.znsAppend = REQ_OPT_ZNS_APPEND;
+			ZnsAppendNoteSlice(cmdSlotTag);
+		}
 
 		tempLsa++;
 		transCounter++;
@@ -193,8 +218,15 @@ void ReqTransNvmeToSlice(unsigned int cmdSlotTag, unsigned int startLba, unsigne
 	reqPoolPtr->reqPool[reqSlotTag].nvmeDmaInfo.startIndex = nvmeDmaStartIndex;
 	reqPoolPtr->reqPool[reqSlotTag].nvmeDmaInfo.nvmeBlockOffset = nvmeBlockOffset;
 	reqPoolPtr->reqPool[reqSlotTag].nvmeDmaInfo.numOfNvmeBlock = tempNumOfNvmeBlock;
+	reqPoolPtr->reqPool[reqSlotTag].reqOpt.znsAppend = REQ_OPT_ZNS_APPEND_NONE;
+	reqPoolPtr->reqPool[reqSlotTag].reqOpt.nvmeCmdEpoch = ZnsNvmeCmdEpoch(cmdSlotTag);
 
 	PutToSliceReqQ(reqSlotTag);
+	if(ZnsAppendIsActive(cmdSlotTag))
+	{
+		reqPoolPtr->reqPool[reqSlotTag].reqOpt.znsAppend = REQ_OPT_ZNS_APPEND;
+		ZnsAppendNoteSlice(cmdSlotTag);
+	}
 }
 
 
@@ -249,6 +281,8 @@ void DataReadFromNand(unsigned int originReqSlotTag)
 		reqPoolPtr->reqPool[reqSlotTag].reqOpt.nandEccWarning = REQ_OPT_NAND_ECC_WARNING_ON;
 		reqPoolPtr->reqPool[reqSlotTag].reqOpt.rowAddrDependencyCheck = REQ_OPT_ROW_ADDR_DEPENDENCY_CHECK;
 		reqPoolPtr->reqPool[reqSlotTag].reqOpt.blockSpace = REQ_OPT_BLOCK_SPACE_MAIN;
+		reqPoolPtr->reqPool[reqSlotTag].reqOpt.hostNvmeRead = 1;
+		reqPoolPtr->reqPool[reqSlotTag].reqOpt.nvmeCmdEpoch = reqPoolPtr->reqPool[originReqSlotTag].reqOpt.nvmeCmdEpoch;
 
 		reqPoolPtr->reqPool[reqSlotTag].dataBufInfo.entry = reqPoolPtr->reqPool[originReqSlotTag].dataBufInfo.entry;
 		UpdateDataBufEntryInfoBlockingReq(reqPoolPtr->reqPool[reqSlotTag].dataBufInfo.entry, reqSlotTag);
@@ -626,15 +660,20 @@ void IssueNvmeDmaReq(unsigned int reqSlotTag)
 {
 	unsigned int devAddr, dmaIndex, numOfNvmeBlock;
 
+	unsigned int autoCpl;
+
 	dmaIndex = reqPoolPtr->reqPool[reqSlotTag].nvmeDmaInfo.startIndex;
 	devAddr = GenerateDataBufAddr(reqSlotTag);
 	numOfNvmeBlock = 0;
+	autoCpl = NVME_COMMAND_AUTO_COMPLETION_ON;
+	if(ZnsAppendIsActive(reqPoolPtr->reqPool[reqSlotTag].nvmeCmdSlotTag))
+		autoCpl = NVME_COMMAND_AUTO_COMPLETION_OFF;
 
 	if(reqPoolPtr->reqPool[reqSlotTag].reqCode == REQ_CODE_RxDMA)
 	{
 		while(numOfNvmeBlock < reqPoolPtr->reqPool[reqSlotTag].nvmeDmaInfo.numOfNvmeBlock)
 		{
-			set_auto_rx_dma(reqPoolPtr->reqPool[reqSlotTag].nvmeCmdSlotTag, dmaIndex, devAddr, NVME_COMMAND_AUTO_COMPLETION_ON);
+			set_auto_rx_dma(reqPoolPtr->reqPool[reqSlotTag].nvmeCmdSlotTag, dmaIndex, devAddr, autoCpl);
 
 			numOfNvmeBlock++;
 			dmaIndex++;
@@ -647,7 +686,10 @@ void IssueNvmeDmaReq(unsigned int reqSlotTag)
 	{
 		while(numOfNvmeBlock < reqPoolPtr->reqPool[reqSlotTag].nvmeDmaInfo.numOfNvmeBlock)
 		{
-			set_auto_tx_dma(reqPoolPtr->reqPool[reqSlotTag].nvmeCmdSlotTag, dmaIndex, devAddr, NVME_COMMAND_AUTO_COMPLETION_ON);
+			unsigned int txAutoCpl = NVME_COMMAND_AUTO_COMPLETION_ON;
+			if(ZnsHostReadAutoCplOff(reqPoolPtr->reqPool[reqSlotTag].nvmeCmdSlotTag, reqPoolPtr->reqPool[reqSlotTag].reqOpt.nvmeCmdEpoch))
+				txAutoCpl = NVME_COMMAND_AUTO_COMPLETION_OFF;
+			set_auto_tx_dma(reqPoolPtr->reqPool[reqSlotTag].nvmeCmdSlotTag, dmaIndex, devAddr, txAutoCpl);
 
 			numOfNvmeBlock++;
 			dmaIndex++;
@@ -679,7 +721,13 @@ void CheckDoneNvmeDmaReq()
 				rxDone = check_auto_rx_dma_partial_done(reqPoolPtr->reqPool[reqSlotTag].nvmeDmaInfo.reqTail , reqPoolPtr->reqPool[reqSlotTag].nvmeDmaInfo.overFlowCnt);
 
 			if(rxDone)
+			{
+				unsigned int cmdSlotTag = reqPoolPtr->reqPool[reqSlotTag].nvmeCmdSlotTag;
+				unsigned int appendSlice = reqPoolPtr->reqPool[reqSlotTag].reqOpt.znsAppend;
 				SelectiveGetFromNvmeDmaReqQ(reqSlotTag);
+				if(appendSlice)
+					ZnsAppendOnRxDmaDone(cmdSlotTag);
+			}
 		}
 		else
 		{
