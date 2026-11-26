@@ -156,6 +156,8 @@ unsigned int GetFromFreeReqQ()
 	reqPoolPtr->reqPool[reqSlotTag].reqQueueType =  REQ_QUEUE_TYPE_NONE;
 	reqPoolPtr->reqPool[reqSlotTag].reqOpt.hostNvmeRead = 0;
 	reqPoolPtr->reqPool[reqSlotTag].reqOpt.nvmeCmdEpoch = 0;
+	reqPoolPtr->reqPool[reqSlotTag].prevBlockingReq = REQ_SLOT_TAG_NONE;
+	reqPoolPtr->reqPool[reqSlotTag].nextBlockingReq = REQ_SLOT_TAG_NONE;
 	freeReqQ.reqCnt--;
 
 	return reqSlotTag;
