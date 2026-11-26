@@ -801,18 +801,10 @@ static unsigned int znsReadBufIdx;
 static unsigned int AllocateZnsReadRingBuf(void)
 {
 	unsigned int base = AVAILABLE_DATA_BUFFER_ENTRY_COUNT + OPEN_ZONE_DATA_BUFFER_ENTRY_COUNT;
-	unsigned int i;
+	unsigned int dataBufEntry = base + znsReadBufIdx;
 
-	for(i = 0; i < ACTIVE_ZONE_READ_BUFFER_ENTRY_COUNT; i++)
-	{
-		unsigned int dataBufEntry = base + znsReadBufIdx;
-
-		znsReadBufIdx = (znsReadBufIdx + 1) % ACTIVE_ZONE_READ_BUFFER_ENTRY_COUNT;
-		if(dataBufMapPtr->dataBuf[dataBufEntry].blockingReqTail == REQ_SLOT_TAG_NONE)
-			return dataBufEntry;
-	}
-
-	return DATA_BUF_FAIL;
+	znsReadBufIdx = (znsReadBufIdx + 1) % ACTIVE_ZONE_READ_BUFFER_ENTRY_COUNT;
+	return dataBufEntry;
 }
 
 static int ZnsWriteSliceIncomplete(unsigned int zoneID, unsigned int logicalSliceAddr)
